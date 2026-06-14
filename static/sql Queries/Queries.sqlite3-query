@@ -1,0 +1,31 @@
+-- database: ../../.venv/database.db
+
+-- Use the ▷ button in the top right corner to run the entire file.
+
+SELECT * FROM Training;
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+INSERT into Training (Shoulder, Chest, Back, Leg, Abdomen, Aerobics) values ('Shoulder Workout', 'Chest Workout', 'Back Workout', 'Leg Workout', 'Abdomen Workout', 'Aerobics Workout');
+-- Bikes
+SELECT * FROM Training;
+-- All training and trainers
+SELECT trainer.Name, training.Shoulder, training.Chest FROM Training
+JOIN Trainer ON Training.TrainerID = Trainer.TrainerID;
+Select trainer.Chest from Training
+JOIN Trainer ON Training.TrainerID = Trainer.TrainerID
+Where trainer.Name = 'Jerry Li';
+-- Just ID , Trainer, Shoulder and ImageURL
+SELECT Training.ID, Trainer.Name, Training.Shoulder, Training.ImageURL 
+FROM Training
+JOIN Trainer ON Training.TrainerID = Trainer.TrainerID;
+--just one training base on the ID
+Select* from Training join Trainer on Trainers.TrainerID = trained.TrainerID
+where Training.TrainingtypeID = 2;
+
+
