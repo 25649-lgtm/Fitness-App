@@ -2,23 +2,86 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>GymTracker</title>
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='CSS/style.css') }}">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Login</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='CSS/style.css') }}"
+    >
 </head>
-<body>  
-    <nav class="navbar">
-        <div class="logo">
-            GymTracker
-        </div>
 
-        <div class="nav-links">
-            <a href="/">Home</a>
-            <a href="/plans">Workout Plans</a>
-            <a href="/exercises">Exercises</a>
-            <a href="/notes">Workout Notes</a>
-        </div>
-    </nav>
+<body class="login-page">
+
+    <main class="login-container">
+
+        <section class="login-information">
+            <h1>GymTracker</h1>
+
+            <h2>Track your training.<br>Build your progress.</h2>
+
+            <p>
+                Here at GymTracker, we believe in the power of consistency and dedication. Our platform is designed to help you create personalized workout plans, track your exercises, and monitor your progress over time. Whether you're a beginner or an experienced athlete, GymTracker is here to support your fitness journey.
+            </p>
+        </section>
+
+        <section class="login-card">
+
+            <div class="login-heading">
+                <h2>Welcome</h2>
+                <p>Sign in to continue to GymTracker.</p>
+            </div>
+
+            {% if error %}
+                <div class="login-error">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('login') }}">
+
+                <div class="form-group">
+                    <label for="email">Email</label>
+
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="Enter your email"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Enter your password"
+                        required
+                    >
+                </div>
+
+                <button type="submit" class="login-submit">
+                    Login
+                </button>
+
+            </form>
+
+            <p class="login-footer">
+                Every workout counts.
+            </p>
+
+        </section>
+
+    </main>
+
 </body>
+</html>

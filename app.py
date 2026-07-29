@@ -1,7 +1,7 @@
 import os
 import sqlite3
 
-from flask import Flask, g, render_template
+from flask import (Flask, g, render_template, request, redirect, url_for, session)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,8 +45,35 @@ def query_db(query, args=(), one=False):
 
     return results
 
-
 @app.route("/")
+def login():
+    error = None
+    if "user_id" in session:
+        return redirect(url_for("homepage"))
+    if request.method == "POST":
+        email = request.form["email"]
+        password = request.form["password"]
+
+        # Query the database for the user
+        user_sql = """
+            SELECT user_id, user_name, email, password
+            FROM User
+            WHERE email = ?;
+        """
+        user = query_db(user_sql, (email,), one=True)
+
+        if user is None:
+            error = "Incorrect email"
+        elif user["password"] != password:
+            error = "Incorrect password"
+        else:
+            session["user_id"] = user["user_id"]
+            session["user_name"] = user["user_name"]
+            session["email"] = user["email"]
+            return redirect(url_for("homepage"))
+    return render_template("login.html", error=error)
+
+@app.route("/home")
 def homepage():
     user_id = 1
 
