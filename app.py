@@ -1,7 +1,7 @@
 import os
 import sqlite3
 
-from flask import Flask, g
+from flask import Flask, g, render_template
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -48,12 +48,17 @@ def query_db(query, args=(), one=False):
 
 @app.route("/")
 def homepage():
-    # Show every exercise included in a workout plan
-    sql = """
+    user_id = 1
+
+    user_sql = """
+        SELECT user_id, user_name, weight, height, goal
+        FROM User
+        WHERE user_id = ?;
+    """
+    user = query_db(user_sql, (user_id,), one=True)
+
+    workout_sql = """
         SELECT
-            WorkoutExercise.workout_exercise_id,
-            User.user_name,
-            WorkPlan.plan_name,
             WorkDay.day_name,
             Exercise.exercise_name,
             Exercise.equipment,
@@ -64,19 +69,46 @@ def homepage():
             ON WorkoutExercise.day_id = WorkDay.day_id
         JOIN WorkPlan
             ON WorkDay.plan_id = WorkPlan.plan_id
-        JOIN User
-            ON WorkPlan.user_id = User.user_id
         JOIN Exercise
             ON WorkoutExercise.exercise_id = Exercise.exercise_id
-        ORDER BY
-            WorkPlan.plan_id,
-            WorkDay.day_id,
-            WorkoutExercise.workout_exercise_id;
+        WHERE WorkPlan.user_id = ?
+        ORDER BY WorkDay.day_id;
     """
+    workouts = query_db(workout_sql, (user_id,))
 
-    results = query_db(sql)
+    notes_sql = """
+        SELECT
+            Exercise.exercise_name,
+            WorkNotes.date,
+            WorkNotes.weight,
+            WorkNotes.sets,
+            WorkNotes.reps,
+            WorkNotes.notes
+        FROM WorkNotes
+        JOIN Exercise
+            ON WorkNotes.exercise_id = Exercise.exercise_id
+        WHERE WorkNotes.user_id = ?
+        ORDER BY WorkNotes.date DESC
+        LIMIT 5;
+    """
+    recent_notes = query_db(notes_sql, (user_id,))
 
-    return str([dict(row) for row in results])
+    stats_sql = """
+        SELECT
+            COUNT(*) AS workout_count,
+            COUNT(DISTINCT exercise_id) AS exercise_count
+        FROM WorkNotes
+        WHERE user_id = ?;
+    """
+    stats = query_db(stats_sql, (user_id,), one=True)
+
+    return render_template(
+        "homepage.html",
+        user=user,
+        workouts=workouts,
+        recent_notes=recent_notes,
+        stats=stats
+    )
 
 
 @app.route("/training/<int:id>")

@@ -1,37 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>GymTracker</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='CSS/style.css') }}">
+</head>
+
 <body>
 
-<nav>
+<nav class="navbar">
 
-GymTracker
+    <div class="logo">
+        GymTracker
+    </div>
+
+    <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/plans">Workout Plans</a>
+        <a href="/exercises">Exercises</a>
+        <a href="/notes">Workout Notes</a>
+    </div>
 
 </nav>
 
-<div class="container">
 
-<div class="today-workout">
+<main class="container">
 
-Today's Workout
+    <section class="welcome-section">
 
-</div>
+        {% if user %}
+            <h1>Welcome, {{ user["user_name"] }}</h1>
 
-<div class="weekly-progress">
+            <p>
+                Goal: {{ user["goal"] }}
+                |
+                Current weight: {{ user["weight"] }} kg
+            </p>
+        {% else %}
+            <h1>Welcome to GymTracker</h1>
+            <p>Create a workout plan and start tracking your progress.</p>
+        {% endif %}
 
-Weekly Progress
+    </section>
 
-</div>
 
-<div class="quick-menu">
+    <section class="dashboard-grid">
 
-Buttons
+        <!-- Today's Workout -->
+        <div class="dashboard-card today-workout">
 
-</div>
+            <div class="card-header">
+                <h2>Today's Workout</h2>
+                <span class="card-label">Training Plan</span>
+            </div>
 
-<div class="recent-activity">
+            {% if workouts %}
 
-History
+                {% for workout in workouts %}
 
-</div>
+                    <div class="workout-item">
 
-</div>
+                        <div class="workout-information">
+                            <h3>{{ workout["exercise_name"] }}</h3>
+
+                            <p>
+                                {{ workout["day_name"] }}
+                                ·
+                                {{ workout["equipment"] }}
+                            </p>
+                        </div>
+
+                        <div class="workout-target">
+                            <strong>
+                                {{ workout["sets"] }} ×
+                                {{ workout["reps"] }}
+                            </strong>
+
+                            <span>Sets × Reps</span>
+                        </div>
+
+                    </div>
+
+                {% endfor %}
+
+                <a href="/training/1" class="primary-button">
+                    Start Workout
+                </a>
+
+            {% else %}
+
+                <div class="empty-message">
+                    <p>No workout has been planned yet.</p>
+
+                    <a href="/plans" class="primary-button">
+                        Create Workout Plan
+                    </a>
+                </div>
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- Weekly Progress -->
+        <div class="dashboard-card weekly-progress">
+
+            <div class="card-header">
+                <h2>Weekly Progress</h2>
+                <span class="card-label">This Week</span>
+            </div>
+
+            <div class="progress-statistics">
+
+                <div class="progress-item">
+                    <span class="progress-number">
+                        {{ stats["workout_count"] if stats else 0 }}
+                    </span>
+
+                    <span class="progress-title">
+                        Workouts Recorded
+                    </span>
+                </div>
+
+                <div class="progress-item">
+                    <span class="progress-number">
+                        {{ stats["exercise_count"] if stats else 0 }}
+                    </span>
+
+                    <span class="progress-title">
+                        Exercises Tracked
+                    </span>
+                </div>
+
+                <div class="progress-item">
+                    <span class="progress-number">
+                        {{ user["weight"] if user else 0 }}
+                    </span>
+
+                    <span class="progress-title">
+                        Current Weight (kg)
+                    </span>
+                </div>
+
+            </div>
+
+            <div class="progress-bar">
+
+                <div class="progress-bar-fill"></div>
+
+            </div>
+
+            <p class="progress-message">
+                Keep recording your workouts to build a consistent routine.
+            </p>
+
+        </div>
+
+
+        <!-- Quick Menu -->
+        <div class="dashboard-card quick-menu">
+
+            <div class="card-header">
+                <h2>Quick Menu</h2>
+                <span class="card-label">Actions</span>
+            </div>
+
+            <div class="menu-buttons">
+
+                <a href="/plans" class="menu-button">
+                    <span class="menu-icon">+</span>
+
+                    <div>
+                        <strong>Create Plan</strong>
+                        <p>Add a new workout plan</p>
+                    </div>
+                </a>
+
+                <a href="/notes" class="menu-button">
+                    <span class="menu-icon">✓</span>
+
+                    <div>
+                        <strong>Record Workout</strong>
+                        <p>Add your training results</p>
+                    </div>
+                </a>
+
+                <a href="/exercises" class="menu-button">
+                    <span class="menu-icon">≡</span>
+
+                    <div>
+                        <strong>View Exercises</strong>
+                        <p>Browse the exercise list</p>
+                    </div>
+                </a>
+
+                <a href="/profile" class="menu-button">
+                    <span class="menu-icon">●</span>
+
+                    <div>
+                        <strong>Profile</strong>
+                        <p>View your fitness information</p>
+                    </div>
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <!-- Recent Activity -->
+        <div class="dashboard-card recent-activity">
+
+            <div class="card-header">
+                <h2>Recent Activity</h2>
+
+                <a href="/notes" class="view-all-link">
+                    View all
+                </a>
+            </div>
+
+            {% if recent_notes %}
+
+                <div class="activity-list">
+
+                    {% for note in recent_notes %}
+
+                        <div class="activity-item">
+
+                            <div class="activity-icon">
+                                {{ note["exercise_name"][0] }}
+                            </div>
+
+                            <div class="activity-information">
+
+                                <h3>
+                                    {{ note["exercise_name"] }}
+                                </h3>
+
+                                <p>
+                                    {{ note["weight"] }} kg
+                                    ·
+                                    {{ note["sets"] }} sets
+                                    ·
+                                    {{ note["reps"] }} reps
+                                </p>
+
+                                {% if note["notes"] %}
+                                    <p class="activity-note">
+                                        {{ note["notes"] }}
+                                    </p>
+                                {% endif %}
+
+                            </div>
+
+                            <div class="activity-date">
+                                {{ note["date"] }}
+                            </div>
+
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+            {% else %}
+
+                <div class="empty-message">
+                    <p>No workout history has been recorded.</p>
+
+                    <a href="/notes" class="secondary-button">
+                        Add Workout Record
+                    </a>
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </section>
+
+</main>
 
 </body>
+</html>
