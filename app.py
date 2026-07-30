@@ -45,7 +45,7 @@ def query_db(query, args=(), one=False):
 
     return results
 
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
 def login():
     error = None
     if "user_id" in session:
@@ -73,9 +73,12 @@ def login():
             return redirect(url_for("homepage"))
     return render_template("login.html", error=error)
 
-@app.route("/home")
+@app.route("/homepage")
 def homepage():
-    user_id = 1
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    user_id = session["user_id"]
 
     user_sql = """
         SELECT user_id, user_name, weight, height, goal
@@ -137,6 +140,10 @@ def homepage():
         stats=stats
     )
 
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 @app.route("/training/<int:id>")
 def training(id):
