@@ -425,7 +425,9 @@ body {
     color: #1f1f1f;
 }
 
+.register-btn,
 .login-submit {
+    display: block;
     width: 100%;
     margin-top: 8px;
     padding: 12px 14px;
@@ -434,9 +436,13 @@ body {
     background: #3c003c;
     color: #ffffff;
     font-weight: bold;
+    font-family: inherit;
+    text-align: center;
+    text-decoration: none;
     cursor: pointer;
 }
 
+.register-btn:hover,
 .login-submit:hover {
     background: #5a005a;
 }
@@ -449,14 +455,9 @@ body {
     color: #ffd7d7;
 }
 
-.login-footer {
-    margin-top: 20px;
-    text-align: center;
-    color: #c8b0b0;
-}
-
 @media (max-width: 800px) {
     .login-container {
         grid-template-columns: 1fr;
     }
 }
+

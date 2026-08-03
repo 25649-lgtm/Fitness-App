@@ -1,7 +1,15 @@
 import os
 import sqlite3
 
-from flask import (Flask, g, render_template, request, redirect, url_for, session)
+from flask import (
+    Flask,
+    g,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -10,6 +18,90 @@ DATABASE = os.path.join(BASE_DIR, ".venv", "database.db")
 
 # Initialize Flask app
 app = Flask(__name__)
+app.config["SECRET_KEY"] = "gymtraker_secret_key"
+
+
+def init_db():
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS User (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                weight REAL,
+                height REAL,
+                goal TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS WorkPlan (
+                plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                plan_name TEXT NOT NULL,
+                description TEXT,
+                date TEXT,
+                FOREIGN KEY (user_id) REFERENCES User(user_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS WorkDay (
+                day_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_id INTEGER NOT NULL,
+                day_name TEXT NOT NULL,
+                FOREIGN KEY (plan_id) REFERENCES WorkPlan(plan_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS Exercise (
+                exercise_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exercise_name TEXT NOT NULL,
+                description TEXT,
+                equipment TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS WorkoutExercise (
+                workout_exercise_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                day_id INTEGER NOT NULL,
+                exercise_id INTEGER NOT NULL,
+                sets INTEGER,
+                reps INTEGER,
+                FOREIGN KEY (day_id) REFERENCES WorkDay(day_id),
+                FOREIGN KEY (exercise_id) REFERENCES Exercise(exercise_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS WorkNotes (
+                notes_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                exercise_id INTEGER NOT NULL,
+                date TEXT,
+                weight REAL,
+                sets INTEGER,
+                reps INTEGER,
+                notes TEXT,
+                FOREIGN KEY (user_id) REFERENCES User(user_id),
+                FOREIGN KEY (exercise_id) REFERENCES Exercise(exercise_id)
+            )
+            """
+        )
+        conn.commit()
+
+
+init_db()
 
 
 def get_db():
@@ -45,6 +137,46 @@ def query_db(query, args=(), one=False):
 
     return results
 
+
+@app.route("/register", methods=["GET", "POST"])
+@app.route("/signup", methods=["GET", "POST"])
+def register():
+    error = None
+
+    if request.method == "POST":
+        user_name = request.form.get("user_name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not user_name or not email or not password:
+            error = "Please fill in all fields."
+        elif password != confirm_password:
+            error = "Passwords do not match."
+        else:
+            existing_user = query_db(
+                "SELECT user_id FROM User WHERE email = ?;",
+                (email,),
+                one=True,
+            )
+
+            if existing_user is not None:
+                error = "An account with that email already exists."
+            else:
+                db = get_db()
+                db.execute(
+                    """
+                    INSERT INTO User (user_name, email, password)
+                    VALUES (?, ?, ?);
+                    """,
+                    (user_name, email, password),
+                )
+                db.commit()
+                return redirect(url_for("login"))
+
+    return render_template("sign up.html", error=error)
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
     error = None
@@ -72,6 +204,7 @@ def login():
             session["email"] = user["email"]
             return redirect(url_for("homepage"))
     return render_template("login.html", error=error)
+
 
 @app.route("/homepage")
 def homepage():
@@ -137,13 +270,15 @@ def homepage():
         user=user,
         workouts=workouts,
         recent_notes=recent_notes,
-        stats=stats
+        stats=stats,
     )
+
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
 
 @app.route("/training/<int:id>")
 def training(id):
