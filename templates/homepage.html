@@ -96,8 +96,13 @@
                 <div class="empty-message">
                     <p>No workout has been planned yet.</p>
 
-                    <a href="/plans" class="primary-button">
-                        Create Workout Plan
+                    <a href="{{ url_for('workout_plan') }}" class="menu-button">
+                        <span class="menu-icon">+</span>
+
+                        <div>
+                            <strong>Create Workout Plan</strong>
+                            <p>Create your first workout plan</p>
+                            </div>
                     </a>
                 </div>
 

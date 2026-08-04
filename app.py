@@ -359,6 +359,70 @@ def notes():
 
     return str([dict(row) for row in results])
 
+@app.route("/workout-plan", methods=["GET", "POST"])
+def workout_plan():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    user_id = session["user_id"]
+    error = None
+
+    if request.method == "POST":
+        plan_name = request.form.get("plan_name", "").strip()
+        description = request.form.get("description", "").strip()
+        date = request.form.get("date", "").replace("-", "")
+
+        if not plan_name:
+            error = "Please enter a plan name."
+
+        elif not date:
+            error = "Please select a start date."
+
+        else:
+            db = get_db()
+
+            cursor = db.execute(
+                """
+                INSERT INTO WorkPlan (
+                    user_id,
+                    plan_name,
+                    description,
+                    date
+                )
+                VALUES (?, ?, ?, ?);
+                """,
+                (
+                    user_id,
+                    plan_name,
+                    description,
+                    int(date)
+                )
+            )
+
+            plan_id = cursor.lastrowid
+
+            selected_days = request.form.getlist("training_days")
+
+            for day_name in selected_days:
+                db.execute(
+                    """
+                    INSERT INTO WorkDay (
+                        plan_id,
+                        day_name
+                    )
+                    VALUES (?, ?);
+                    """,
+                    (plan_id, day_name)
+                )
+
+            db.commit()
+
+            return redirect(url_for("homepage"))
+
+    return render_template(
+        "workout plan.html",
+        error=error
+                )
 
 if __name__ == "__main__":
     app.run(debug=True)

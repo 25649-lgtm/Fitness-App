@@ -151,7 +151,7 @@ body {
 }
 
 .primary-button:hover {
-    background-color: #414141;
+    background-color: #b99e9e;
 }
 
 .progress-statistics {
@@ -218,7 +218,7 @@ body {
 }
 
 .menu-button:hover {
-    background-color: #000000;
+    background-color: #3c003c;
     border-color: #3c003c;
 }
 
