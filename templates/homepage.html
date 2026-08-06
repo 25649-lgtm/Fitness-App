@@ -33,7 +33,30 @@
     <section class="welcome-section">
 
         {% if user %}
-            <h1>Welcome, {{ user["user_name"] }}</h1>
+            <h1>
+                Welcome back,
+
+                <div class="profile-menu">
+
+                    <span class="profile-name">
+                        {{ user["user_name"] }} ▼
+                    </span>
+
+                    <div class="profile-dropdown">
+
+                        <a href="{{ url_for('login') }}">
+                            Change Account
+                        </a>
+
+                        <a href="{{ url_for('logout') }}">
+                            Log Out
+                        </a>
+
+                    </div>
+
+                </div>
+
+</h1>
 
             <p>
                 Goal: {{ user["goal"] }}
