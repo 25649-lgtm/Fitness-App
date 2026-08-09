@@ -417,12 +417,167 @@ def workout_plan():
 
             db.commit()
 
-            return redirect(url_for("homepage"))
+            db.commit()
+
+            return redirect(
+                url_for(
+                    "add_plan_exercises",
+                    plan_id=plan_id
+                )
+)
 
     return render_template(
         "workout plan.html",
         error=error
                 )
+
+@app.route(
+    "/workout-plan/<int:plan_id>/exercises",
+    methods=["GET", "POST"]
+)
+def add_plan_exercises(plan_id):
+    # 检查用户是否登录
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    user_id = session["user_id"]
+    # 检查这个计划是不是当前用户的
+    # 防止用户修改其他人的计划
+    plan = query_db(
+        """
+        SELECT
+            plan_id,
+            plan_name,
+            description
+        FROM WorkPlan
+        WHERE plan_id = ?
+        AND user_id = ?;
+        """,
+        (plan_id, user_id),
+        one=True,
+    )
+
+    if plan is None:
+        return "Workout plan not found", 404
+
+    # 如果用户提交 Add Exercise 表单
+    if request.method == "POST":
+
+        day_id = request.form.get("day_id")
+        exercise_id = request.form.get("exercise_id")
+        sets = request.form.get("sets")
+        reps = request.form.get("reps")
+
+        # 检查必须的数据
+        if day_id and exercise_id:
+
+            # 确认选择的训练日属于这个 plan
+            day = query_db(
+                """
+                SELECT day_id
+                FROM WorkDay
+                WHERE day_id = ?
+                AND plan_id = ?;
+                """,
+                (day_id, plan_id),
+                one=True,
+            )
+
+            if day is not None:
+
+                db = get_db()
+
+                db.execute(
+                    """
+                    INSERT INTO WorkoutExercise (
+                        day_id,
+                        exercise_id,
+                        sets,
+                        reps
+                    )
+                    VALUES (?, ?, ?, ?);
+                    """,
+                    (
+                        day_id,
+                        exercise_id,
+                        sets,
+                        reps,
+                    ),
+                )
+
+                db.commit()
+
+        # 添加完成后重新加载当前页面
+        return redirect(
+            url_for(
+                "add_plan_exercises",
+                plan_id=plan_id
+            )
+        )
+
+    # 查询这个 Plan 的训练日
+    days = query_db(
+        """
+        SELECT
+            day_id,
+            day_name
+        FROM WorkDay
+        WHERE plan_id = ?
+        ORDER BY day_id;
+        """,
+        (plan_id,),
+    )
+
+    # 查询所有可以添加的动作
+    exercises = query_db(
+        """
+        SELECT
+            exercise_id,
+            exercise_name,
+            equipment
+        FROM Exercise
+        ORDER BY exercise_name;
+        """
+    )
+
+    # 查询当前已经添加到计划中的动作
+    plan_exercises = query_db(
+        """
+        SELECT
+            WorkoutExercise.workout_exercise_id,
+            WorkoutExercise.day_id,
+            WorkDay.day_name,
+            Exercise.exercise_name,
+            Exercise.equipment,
+            WorkoutExercise.sets,
+            WorkoutExercise.reps
+
+        FROM WorkoutExercise
+
+        JOIN WorkDay
+            ON WorkoutExercise.day_id =
+               WorkDay.day_id
+
+        JOIN Exercise
+            ON WorkoutExercise.exercise_id =
+               Exercise.exercise_id
+
+        WHERE WorkDay.plan_id = ?
+
+        ORDER BY
+            WorkDay.day_id,
+            WorkoutExercise.workout_exercise_id;
+        """,
+        (plan_id,),
+    )
+
+    return render_template(
+        "add exercises.html",
+        plan=plan,
+        days=days,
+        exercises=exercises,
+        plan_exercises=plan_exercises,
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)

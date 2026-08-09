@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Add Exercises | GymTracker
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='CSS/style.css') }}"
+    >
+
+</head>
+
+
+<body class="plan-page">
+
+<main class="exercise-plan-container">
+
+
+    <!-- =========================
+         页面标题
+         ========================= -->
+
+    <section class="exercise-plan-header">
+
+        <p class="step-label">
+            STEP 2 OF 2
+        </p>
+
+        <h1>
+            {{ plan["plan_name"] }}
+        </h1>
+
+        <p>
+            Add exercises to each training day.
+        </p>
+
+    </section>
+
+
+
+    <!-- =========================
+         添加动作
+         ========================= -->
+
+    <section class="plan-card">
+
+        <div class="plan-heading">
+
+            <h2>
+                Add Exercise
+            </h2>
+
+            <p>
+                Select a training day and an exercise.
+            </p>
+
+        </div>
+
+
+        <form method="POST">
+
+
+            <!-- 选择训练日 -->
+
+            <div class="form-group">
+
+                <label for="day_id">
+                    Training Day
+                </label>
+
+                <select
+                    name="day_id"
+                    id="day_id"
+                    required
+                >
+
+                    <option value="">
+                        Select a day
+                    </option>
+
+                    {% for day in days %}
+
+                        <option value="{{ day['day_id'] }}">
+
+                            {{ day["day_name"] }}
+
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+
+            <!-- 选择训练动作 -->
+
+            <div class="form-group">
+
+                <label for="exercise_id">
+                    Exercise
+                </label>
+
+                <select
+                    name="exercise_id"
+                    id="exercise_id"
+                    required
+                >
+
+                    <option value="">
+                        Select an exercise
+                    </option>
+
+                    {% for exercise in exercises %}
+
+                        <option
+                            value="{{ exercise['exercise_id'] }}"
+                        >
+
+                            {{ exercise["exercise_name"] }}
+
+                            {% if exercise["equipment"] %}
+
+                                -
+                                {{ exercise["equipment"] }}
+
+                            {% endif %}
+
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+
+            <!-- Sets -->
+
+            <div class="form-group">
+
+                <label for="sets">
+                    Sets
+                </label>
+
+                <input
+                    type="number"
+                    id="sets"
+                    name="sets"
+                    min="1"
+                    placeholder="Example: 4"
+                    required
+                >
+
+            </div>
+
+
+
+            <!-- Reps -->
+
+            <div class="form-group">
+
+                <label for="reps">
+                    Reps
+                </label>
+
+                <input
+                    type="number"
+                    id="reps"
+                    name="reps"
+                    min="1"
+                    placeholder="Example: 8"
+                    required
+                >
+
+            </div>
+
+
+            <button
+                type="submit"
+                class="plan-submit"
+            >
+                Add Exercise
+            </button>
+
+        </form>
+
+    </section>
+
+
+
+    <!-- =========================
+         当前训练计划
+         ========================= -->
+
+    <section class="plan-card current-plan">
+
+        <div class="plan-heading">
+
+            <h2>
+                Your Workout Plan
+            </h2>
+
+            <p>
+                Exercises currently included in this plan.
+            </p>
+
+        </div>
+
+
+        {% if plan_exercises %}
+
+
+            {% for workout in plan_exercises %}
+
+                <div class="plan-exercise-item">
+
+
+                    <div>
+
+                        <span class="exercise-day">
+
+                            {{ workout["day_name"] }}
+
+                        </span>
+
+                        <h3>
+
+                            {{ workout["exercise_name"] }}
+
+                        </h3>
+
+                        <p>
+
+                            {{ workout["equipment"] }}
+
+                        </p>
+
+                    </div>
+
+
+                    <div class="exercise-target">
+
+                        {{ workout["sets"] }}
+                        ×
+                        {{ workout["reps"] }}
+
+                    </div>
+
+
+                </div>
+
+            {% endfor %}
+
+
+        {% else %}
+
+            <p class="empty-plan">
+                No exercises have been added yet.
+            </p>
+
+        {% endif %}
+
+
+        <!-- 完成计划 -->
+
+        <a
+            href="{{ url_for('homepage') }}"
+            class="finish-plan-button"
+        >
+            Finish Workout Plan
+        </a>
+
+    </section>
+
+
+</main>
+
+</body>
+
+</html>
