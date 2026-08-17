@@ -114,7 +114,9 @@ def init_db():
                     ("Squat", "Compound lower-body movement", "Barbell"),
                     ("Deadlift", "Compound hip-hinge movement", "Barbell"),
                     ("Lat Pulldown", "Vertical back pull", "Cable machine"),
-                    ("Shoulder Press", "Overhead pressing movement", "Dumbbells"),
+                    ("Shoulder Press",
+                     "Overhead pressing movement",
+                     "Dumbbells"),
                     ("Plank", "Core stability hold", "Bodyweight"),
                 ],
             )
@@ -590,17 +592,18 @@ def workout_plan():
                     "add_plan_exercises",
                     plan_id=plan_id
                 )
-)
+                )
 
     return render_template(
         "workout plan.html",
         error=error
                 )
 
+
 @app.route(
     "/workout-plan/<int:plan_id>/exercises",
     methods=["GET", "POST"]
-)
+        )
 def add_plan_exercises(plan_id):
     # 检查用户是否登录
     if "user_id" not in session:
@@ -744,6 +747,7 @@ def add_plan_exercises(plan_id):
         exercises=exercises,
         plan_exercises=plan_exercises,
     )
+
 
 if __name__ == "__main__":
     app.run(debug=True)
