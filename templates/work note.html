@@ -1,11 +1,206 @@
 <!DOCTYPE html>
-<html lang="en">    
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="en">
 
-        <title>Work notes</title>
+<head>
+    <meta charset="UTF-8">
 
-        <link rel="stylesheet"
-              href="{{ url_for('static', filename='CSS/style.css') }}">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Workout Notes | GymTracker</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='CSS/style.css') }}"
+    >
+</head>
+
+<body>
+
+    <nav class="navbar">
+
+        <div class="logo">
+            GymTracker
+        </div>
+
+        <div class="nav-links">
+            <a href="{{ url_for('homepage') }}">Home</a>
+            <a href="{{ url_for('plans') }}">Plans</a>
+            <a href="{{ url_for('exercises') }}">Exercises</a>
+        </div>
+
+    </nav>
+
+    <main class="container">
+
+        <div class="page-heading">
+
+            <div>
+                <p class="step-label">PROGRESS LOG</p>
+                <h1>Workout Notes</h1>
+            </div>
+
+        </div>
+
+        <section class="notes-layout">
+
+            <article class="dashboard-card">
+
+                <h2>Record a Workout</h2>
+
+                {% if error %}
+                    <div class="login-error">
+                        {{ error }}
+                    </div>
+                {% endif %}
+
+                <form method="POST">
+
+                    <div class="form-group">
+                        <label for="exercise_id">Exercise</label>
+
+                        <select
+                            id="exercise_id"
+                            name="exercise_id"
+                            required
+                        >
+                            <option value="">
+                                Choose an exercise
+                            </option>
+
+                            {% for exercise in exercises %}
+                                <option value="{{ exercise['exercise_id'] }}">
+                                    {{ exercise["exercise_name"] }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="date">Date</label>
+
+                        <input
+                            type="date"
+                            id="date"
+                            name="date"
+                            required
+                        >
+                    </div>
+
+                    <div class="inline-fields">
+
+                        <div class="form-group">
+                            <label for="weight">Weight (kg)</label>
+
+                            <input
+                                type="number"
+                                id="weight"
+                                name="weight"
+                                step="0.1"
+                                min="0"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sets">Sets</label>
+
+                            <input
+                                type="number"
+                                id="sets"
+                                name="sets"
+                                min="1"
+                                required
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="reps">Reps</label>
+
+                            <input
+                                type="number"
+                                id="reps"
+                                name="reps"
+                                min="1"
+                                required
+                            >
+                        </div>
+
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notes">Notes</label>
+
+                        <textarea
+                            id="notes"
+                            name="notes"
+                            rows="3"
+                            placeholder="How did it feel?"
+                        ></textarea>
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="plan-submit"
+                    >
+                        Save Workout
+                    </button>
+
+                </form>
+
+            </article>
+
+            <article class="dashboard-card">
+
+                <h2>History</h2>
+
+                {% for note in notes %}
+
+                    <div class="activity-item">
+
+                        <div class="activity-icon">
+                            {{ note["exercise_name"][0] }}
+                        </div>
+
+                        <div class="activity-information">
+
+                            <h3>{{ note["exercise_name"] }}</h3>
+
+                            <p>
+                                {{ note["weight"] or 0 }} kg
+                                &middot;
+                                {{ note["sets"] }} &times;
+                                {{ note["reps"] }}
+                            </p>
+
+                            {% if note["notes"] %}
+                                <p class="activity-note">
+                                    {{ note["notes"] }}
+                                </p>
+                            {% endif %}
+
+                        </div>
+
+                        <div class="activity-date">
+                            {{ note["date"] }}
+                        </div>
+
+                    </div>
+
+                {% else %}
+
+                    <p class="empty-message">
+                        No workouts recorded yet.
+                    </p>
+
+                {% endfor %}
+
+            </article>
+
+        </section>
+
+    </main>
+
+</body>
 </html>

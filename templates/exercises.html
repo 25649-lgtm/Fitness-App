@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Exercises | GymTracker</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='CSS/style.css') }}"
+    >
+</head>
+
+<body>
+
+    <nav class="navbar">
+
+        <div class="logo">
+            GymTracker
+        </div>
+
+        <div class="nav-links">
+            <a href="{{ url_for('homepage') }}">Home</a>
+            <a href="{{ url_for('plans') }}">Plans</a>
+            <a href="{{ url_for('notes') }}">Notes</a>
+        </div>
+
+    </nav>
+
+    <main class="container">
+
+        <div class="page-heading">
+
+            <div>
+                <p class="step-label">EXERCISE LIBRARY</p>
+                <h1>Build a balanced routine</h1>
+            </div>
+
+        </div>
+
+        <section class="content-grid">
+
+            {% for exercise in exercises %}
+
+                <article class="dashboard-card">
+
+                    <span class="card-label">
+                        {{ exercise["equipment"] or "No equipment" }}
+                    </span>
+
+                    <h2>{{ exercise["exercise_name"] }}</h2>
+
+                    <p>
+                        {{ exercise["description"] or "Ready to add to your plan." }}
+                    </p>
+
+                </article>
+
+            {% endfor %}
+
+        </section>
+
+    </main>
+
+</body>
+</html>

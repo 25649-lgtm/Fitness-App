@@ -14,6 +14,7 @@ from flask import (
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(BASE_DIR, ".venv", "database.db")
+os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
 
 
 # Initialize Flask app
@@ -98,6 +99,25 @@ def init_db():
             )
             """
         )
+        if conn.execute("SELECT COUNT(*) FROM Exercise").fetchone()[0] == 0:
+            conn.executemany(
+                """
+                INSERT INTO Exercise (
+                    exercise_name,
+                    description,
+                    equipment
+                )
+                VALUES (?, ?, ?);
+                """,
+                [
+                    ("Bench Press", "Chest pressing movement", "Barbell"),
+                    ("Squat", "Compound lower-body movement", "Barbell"),
+                    ("Deadlift", "Compound hip-hinge movement", "Barbell"),
+                    ("Lat Pulldown", "Vertical back pull", "Cable machine"),
+                    ("Shoulder Press", "Overhead pressing movement", "Dumbbells"),
+                    ("Plank", "Core stability hold", "Bodyweight"),
+                ],
+            )
         conn.commit()
 
 
@@ -331,12 +351,60 @@ def exercises():
 
     results = query_db(sql)
 
-    return str([dict(row) for row in results])
+    return render_template("exercises.html", exercises=results)
 
 
-@app.route("/notes")
+@app.route("/notes", methods=["GET", "POST"])
 def notes():
-    # Show all completed workout records
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    error = None
+
+    if request.method == "POST":
+        exercise_id = request.form.get("exercise_id", type=int)
+        date = request.form.get("date", "").strip()
+        weight = request.form.get("weight", type=float)
+        sets = request.form.get("sets", type=int)
+        reps = request.form.get("reps", type=int)
+        note_text = request.form.get("notes", "").strip()
+
+        if not exercise_id or not date or not sets or not reps:
+            error = (
+                "Please complete the exercise, date, "
+                "sets and reps fields."
+            )
+
+        else:
+            db = get_db()
+
+            db.execute(
+                """
+                INSERT INTO WorkNotes (
+                    user_id,
+                    exercise_id,
+                    date,
+                    weight,
+                    sets,
+                    reps,
+                    notes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    session["user_id"],
+                    exercise_id,
+                    date,
+                    weight,
+                    sets,
+                    reps,
+                    note_text,
+                ),
+            )
+            db.commit()
+
+            return redirect(url_for("notes"))
+
     sql = """
         SELECT
             WorkNotes.notes_id,
@@ -352,12 +420,107 @@ def notes():
             ON WorkNotes.user_id = User.user_id
         JOIN Exercise
             ON WorkNotes.exercise_id = Exercise.exercise_id
-        ORDER BY WorkNotes.date DESC;
+        WHERE WorkNotes.user_id = ?
+        ORDER BY WorkNotes.date DESC, WorkNotes.notes_id DESC;
     """
 
-    results = query_db(sql)
+    results = query_db(sql, (session["user_id"],))
+    exercise_options = query_db(
+        """
+        SELECT
+            exercise_id,
+            exercise_name
+        FROM Exercise
+        ORDER BY exercise_name;
+        """
+    )
 
-    return str([dict(row) for row in results])
+    return render_template(
+        "work note.html",
+        notes=results,
+        exercises=exercise_options,
+        error=error,
+    )
+
+
+@app.route("/plans")
+def plans():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    results = query_db(
+        """
+        SELECT
+            WorkPlan.plan_id,
+            WorkPlan.plan_name,
+            WorkPlan.description,
+            WorkPlan.date,
+            COUNT(DISTINCT WorkDay.day_id) AS day_count,
+            COUNT(WorkoutExercise.workout_exercise_id) AS exercise_count
+        FROM WorkPlan
+        LEFT JOIN WorkDay
+            ON WorkDay.plan_id = WorkPlan.plan_id
+        LEFT JOIN WorkoutExercise
+            ON WorkoutExercise.day_id = WorkDay.day_id
+        WHERE WorkPlan.user_id = ?
+        GROUP BY WorkPlan.plan_id
+        ORDER BY WorkPlan.plan_id DESC;
+        """,
+        (session["user_id"],),
+    )
+
+    return render_template("plans.html", plans=results)
+
+
+@app.route("/profile", methods=["GET", "POST"])
+def profile():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        db = get_db()
+
+        db.execute(
+            """
+            UPDATE User
+            SET
+                user_name = ?,
+                weight = ?,
+                height = ?,
+                goal = ?
+            WHERE user_id = ?;
+            """,
+            (
+                request.form.get("user_name", "").strip(),
+                request.form.get("weight", type=float),
+                request.form.get("height", type=float),
+                request.form.get("goal", "").strip(),
+                session["user_id"],
+            ),
+        )
+        db.commit()
+
+        session["user_name"] = request.form.get("user_name", "").strip()
+
+        return redirect(url_for("profile"))
+
+    user = query_db(
+        """
+        SELECT
+            user_name,
+            email,
+            weight,
+            height,
+            goal
+        FROM User
+        WHERE user_id = ?;
+        """,
+        (session["user_id"],),
+        one=True,
+    )
+
+    return render_template("profile.html", user=user)
+
 
 @app.route("/workout-plan", methods=["GET", "POST"])
 def workout_plan():
@@ -377,6 +540,9 @@ def workout_plan():
 
         elif not date:
             error = "Please select a start date."
+
+        elif not request.form.getlist("training_days"):
+            error = "Please select at least one training day."
 
         else:
             db = get_db()

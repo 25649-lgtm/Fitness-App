@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Workout Plans | GymTracker</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='CSS/style.css') }}"
+    >
+</head>
+
+<body>
+
+    <nav class="navbar">
+
+        <div class="logo">
+            GymTracker
+        </div>
+
+        <div class="nav-links">
+            <a href="{{ url_for('homepage') }}">Home</a>
+            <a href="{{ url_for('plans') }}">Plans</a>
+            <a href="{{ url_for('exercises') }}">Exercises</a>
+            <a href="{{ url_for('notes') }}">Notes</a>
+            <a href="{{ url_for('profile') }}">Profile</a>
+        </div>
+
+    </nav>
+
+    <main class="container">
+
+        <div class="page-heading">
+
+            <div>
+                <p class="step-label">YOUR ROUTINES</p>
+                <h1>Workout Plans</h1>
+            </div>
+
+            <a
+                class="primary-button"
+                href="{{ url_for('workout_plan') }}"
+            >
+                Create Plan
+            </a>
+
+        </div>
+
+        <section class="content-grid">
+
+            {% for plan in plans %}
+
+                <article class="dashboard-card">
+
+                    <span class="card-label">
+                        {{ plan["date"] }}
+                    </span>
+
+                    <h2>{{ plan["plan_name"] }}</h2>
+
+                    <p>
+                        {{ plan["description"] or "No description yet." }}
+                    </p>
+
+                    <p>
+                        {{ plan["day_count"] }} training days
+                        &middot;
+                        {{ plan["exercise_count"] }} exercises
+                    </p>
+
+                    <a
+                        class="secondary-button"
+                        href="{{ url_for('add_plan_exercises', plan_id=plan['plan_id']) }}"
+                    >
+                        Edit Exercises
+                    </a>
+
+                </article>
+
+            {% else %}
+
+                <div class="dashboard-card empty-message">
+
+                    <h2>No plans yet</h2>
+
+                    <p>
+                        Create your first weekly routine to get started.
+                    </p>
+
+                    <a
+                        class="primary-button"
+                        href="{{ url_for('workout_plan') }}"
+                    >
+                        Create Workout Plan
+                    </a>
+
+                </div>
+
+            {% endfor %}
+
+        </section>
+
+    </main>
+
+</body>
+</html>
