@@ -1,5 +1,7 @@
 import os
 import sqlite3
+from contextlib import closing
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from flask import (
     Flask,
@@ -13,7 +15,10 @@ from flask import (
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, ".venv", "database.db")
+# 测试可通过环境变量使用临时数据库；正常运行仍使用原来的数据库。
+DATABASE = os.environ.get(
+    "GYMTRACKER_DATABASE", os.path.join(BASE_DIR, ".venv", "database.db")
+)
 os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
 
 
@@ -24,7 +29,8 @@ app.config["SECRET_KEY"] = "gymtraker_secret_key"
 
 def init_db():
     # 创建这个健身应用需要的数据库表
-    with sqlite3.connect(DATABASE) as conn:
+    # conn 管理事务，closing 确保关闭连接，避免 Windows 下数据库文件被锁住。
+    with closing(sqlite3.connect(DATABASE)) as conn, conn:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute(
             """
@@ -51,6 +57,23 @@ def init_db():
             )
             """
         )
+        # 用独立字段记录密码是否已哈希，避免根据密码内容误判存储格式。
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(User)")}
+        if "password_hashed" not in columns:
+            # 兼容旧数据库：新增标记，原有账户默认尚未转换。
+            conn.execute(
+                "ALTER TABLE User ADD COLUMN password_hashed INTEGER "
+                "NOT NULL DEFAULT 0"
+            )
+        # 只迁移未转换的账户；密码和标记一起更新，重复启动不会重复哈希。
+        for user_id, password in conn.execute(
+            "SELECT user_id, password FROM User WHERE password_hashed = 0"
+        ).fetchall():
+            conn.execute(
+                "UPDATE User SET password = ?, password_hashed = 1 "
+                "WHERE user_id = ?",
+                (generate_password_hash(password), user_id),
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS WorkDay (
@@ -189,12 +212,13 @@ def register():
                 error = "An account with that email already exists."
             else:
                 db = get_db()
+                # 注册时只保存带随机盐的密码哈希，并标记为已转换。
                 db.execute(
                     """
-                    INSERT INTO User (user_name, email, password)
-                    VALUES (?, ?, ?);
+                    INSERT INTO User (user_name, email, password, password_hashed)
+                    VALUES (?, ?, ?, 1);
                     """,
-                    (user_name, email, password),
+                    (user_name, email, generate_password_hash(password)),
                 )
                 db.commit()
                 return redirect(url_for("login"))
@@ -208,10 +232,11 @@ def login():
     if "user_id" in session:
         return redirect(url_for("homepage"))
     if request.method == "POST":
-        email = request.form["email"]
-        password = request.form["password"]
+        # 邮箱与注册时保持相同格式；缺失字段使用空字符串，避免直接报错。
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
 
-        # Query the database for the user
+        # 按邮箱查询账户；密码由下面的哈希验证函数检查。
         user_sql = """
             SELECT user_id, user_name, email, password
             FROM User
@@ -219,11 +244,14 @@ def login():
         """
         user = query_db(user_sql, (email,), one=True)
 
+        # 哈希不能直接与输入密码比较，需要使用 check_password_hash 验证。
         if user is None:
             error = "Incorrect email"
-        elif user["password"] != password:
+        elif not check_password_hash(user["password"], password):
             error = "Incorrect password"
         else:
+            # 登录成功后先清除旧会话，再保存当前账户信息。
+            session.clear()
             session["user_id"] = user["user_id"]
             session["user_name"] = user["user_name"]
             session["email"] = user["email"]
@@ -309,7 +337,10 @@ def logout():
 
 @app.route("/training/<int:id>")
 def training(id):
-    # Show one workout exercise based on workout_exercise_id
+    # 训练详情属于私人数据，未登录用户先返回登录页。
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    # 同时按动作记录 ID 和当前用户筛选，防止修改网址后查看他人的训练。
     sql = """
         SELECT
             WorkoutExercise.workout_exercise_id,
@@ -332,11 +363,13 @@ def training(id):
             ON WorkPlan.user_id = User.user_id
         JOIN Exercise
             ON WorkoutExercise.exercise_id = Exercise.exercise_id
-        WHERE WorkoutExercise.workout_exercise_id = ?;
+        WHERE WorkoutExercise.workout_exercise_id = ?
+        AND WorkPlan.user_id = ?;
     """
 
-    result = query_db(sql, (id,), one=True)
+    result = query_db(sql, (id, session["user_id"]), one=True)
 
+    # 不存在或不属于当前用户时统一返回 404，不透露他人的记录是否存在。
     if result is None:
         return "Training not found", 404
 
