@@ -23,6 +23,7 @@ app.config["SECRET_KEY"] = "gymtraker_secret_key"
 
 
 def init_db():
+    # 创建这个健身应用需要的数据库表
     with sqlite3.connect(DATABASE) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute(
@@ -99,6 +100,7 @@ def init_db():
             )
             """
         )
+        # 动作表为空时加入一些基础动作
         if conn.execute("SELECT COUNT(*) FROM Exercise").fetchone()[0] == 0:
             conn.executemany(
                 """
@@ -171,6 +173,7 @@ def register():
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
 
+        # 创建账户前检查表单内容
         if not user_name or not email or not password:
             error = "Please fill in all fields."
         elif password != confirm_password:
@@ -242,6 +245,7 @@ def homepage():
     """
     user = query_db(user_sql, (user_id,), one=True)
 
+    # 查找用户训练计划里的所有动作
     workout_sql = """
         SELECT
             WorkDay.day_name,
@@ -278,6 +282,7 @@ def homepage():
     """
     recent_notes = query_db(notes_sql, (user_id,))
 
+    # 统计训练记录并显示在进度卡片中
     stats_sql = """
         SELECT
             COUNT(*) AS workout_count,
@@ -407,6 +412,7 @@ def notes():
 
             return redirect(url_for("notes"))
 
+    # 只显示当前用户自己的训练记录
     sql = """
         SELECT
             WorkNotes.notes_id,
@@ -450,6 +456,7 @@ def plans():
     if "user_id" not in session:
         return redirect(url_for("login"))
 
+    # 使用 LEFT JOIN，让没有动作的计划也能显示
     results = query_db(
         """
         SELECT
@@ -537,6 +544,7 @@ def workout_plan():
         description = request.form.get("description", "").strip()
         date = request.form.get("date", "").replace("-", "")
 
+        # 创建计划前检查重要资料
         if not plan_name:
             error = "Please enter a plan name."
 
@@ -569,6 +577,7 @@ def workout_plan():
 
             plan_id = cursor.lastrowid
 
+            # 为每一个选择的训练日建立一条 WorkDay 记录
             selected_days = request.form.getlist("training_days")
 
             for day_name in selected_days:
