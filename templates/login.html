@@ -44,6 +44,8 @@
             {% endif %}
 
             <form method="POST" action="{{ url_for('login') }}">
+                <!-- 验证提交来自当前会话，防止跨站请求伪造。 -->
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                 <div class="form-group">
                     <label for="email">Email</label>

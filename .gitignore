@@ -1,0 +1,5 @@
+# 本地密钥、数据库和 Python 缓存不提交到代码仓库。
+instance/
+.venv/
+__pycache__/
+*.pyc

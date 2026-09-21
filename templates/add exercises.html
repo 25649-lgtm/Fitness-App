@@ -65,6 +65,8 @@
 
 
         <form method="POST">
+                <!-- 验证提交来自当前会话，防止跨站请求伪造。 -->
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
 
             <!-- 选择训练日 -->

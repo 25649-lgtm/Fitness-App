@@ -44,13 +44,17 @@
 
                     <div class="profile-dropdown">
 
-                        <a href="{{ url_for('login') }}">
-                            Change Account
-                        </a>
+                        <!-- 切换账户和退出都先通过受保护的 POST 清除会话。 -->
+                        <form method="POST" action="{{ url_for('logout') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit">Change Account</button>
+                        </form>
 
-                        <a href="{{ url_for('logout') }}">
-                            Log Out
-                        </a>
+                        <!-- 切换账户和退出都先通过受保护的 POST 清除会话。 -->
+                        <form method="POST" action="{{ url_for('logout') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit">Log Out</button>
+                        </form>
 
                     </div>
 

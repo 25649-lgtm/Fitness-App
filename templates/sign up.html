@@ -25,6 +25,8 @@
             {% endif %}
 
             <form method="POST" action="{{ url_for('register') }}">
+                <!-- 验证提交来自当前会话，防止跨站请求伪造。 -->
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label for="user_name">Name</label>
                     <input type="text" id="user_name" name="user_name" placeholder="Enter your name" required>

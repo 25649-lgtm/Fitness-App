@@ -526,7 +526,18 @@ body {
     transform: translateX(-50%) translateY(0);
 }
 
-.profile-dropdown a {
+/* 退出和切换账户改成表单按钮后，保持原来的菜单外观。 */
+.profile-dropdown button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.profile-dropdown a,
+.profile-dropdown button {
     display: block;
 
     padding: 9px 12px;
@@ -543,7 +554,9 @@ body {
     transition: 0.2s;
 }
 
-.profile-dropdown a:hover {
+.profile-dropdown a:hover,
+.profile-dropdown button:hover,
+.profile-dropdown button:focus-visible {
     background: rgba(255, 255, 255, 0.1);
 
     color: #ffffff;

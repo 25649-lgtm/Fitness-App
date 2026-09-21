@@ -1,10 +1,12 @@
 import os
+import secrets
 import sqlite3
 from contextlib import closing
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from flask import (
     Flask,
+    abort,
     g,
     redirect,
     render_template,
@@ -22,9 +24,62 @@ DATABASE = os.environ.get(
 os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
 
 
-# Initialize Flask app
+# 初始化应用；优先读取环境密钥，本地开发则使用持久化的随机密钥文件。
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "gymtraker_secret_key"
+
+
+def load_secret_key():
+    """让密钥保持私密且重启后稳定，避免使用代码中公开的固定值。"""
+    configured = os.environ.get("GYMTRACKER_SECRET_KEY")
+    if configured:
+        if len(configured) < 32:
+            raise ValueError("GYMTRACKER_SECRET_KEY must contain at least 32 characters")
+        return configured
+    os.makedirs(app.instance_path, exist_ok=True)
+    key_path = os.path.join(app.instance_path, "secret_key")
+    try:
+        # 独占创建，已有文件绝不覆盖；密钥文件必须排除在版本控制之外。
+        descriptor = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        pass
+    else:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as key_file:
+            key_file.write(secrets.token_hex(32))
+    with open(key_path, encoding="utf-8") as key_file:
+        key = key_file.read().strip()
+    if len(key) < 32:
+        raise ValueError("Local session key is invalid")
+    return key
+
+
+app.config.update(
+    SECRET_KEY=load_secret_key(),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+
+
+def csrf_token():
+    """为当前会话生成随机表单令牌，同一会话中的多个页面可以共用。"""
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+
+@app.before_request
+def protect_form_submission():
+    """在写操作进入路由前验证令牌，拒绝缺失、伪造及其他会话的提交。"""
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        expected = session.get("csrf_token", "")
+        supplied = request.form.get("csrf_token", "")
+        # 使用字节比较，既避免时序泄露，也让非 ASCII 错误输入正常返回 400。
+        if not expected or not secrets.compare_digest(
+            expected.encode("utf-8"), supplied.encode("utf-8")
+        ):
+            abort(400, description="Form expired or invalid. Reload the page and try again.")
 
 
 def init_db():
@@ -329,8 +384,9 @@ def homepage():
     )
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
+    # 退出会改变登录状态，因此只允许通过带有效 CSRF 令牌的表单提交。
     session.clear()
     return redirect(url_for("login"))
 
