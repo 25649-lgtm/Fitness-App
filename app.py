@@ -84,6 +84,20 @@ def protect_form_submission():
             abort(400, description="Form expired or invalid. Reload the page and try again.")
 
 
+@app.errorhandler(400)
+@app.errorhandler(404)
+@app.errorhandler(500)
+def friendly_error(error):
+    """统一错误页面，不向用户暴露异常、SQL 或服务器路径。"""
+    messages = {
+        400: ("Unable to submit", "This request is invalid or the form has expired. Return to the page, reload it and try again."),
+        404: ("Page not found", "This page or record does not exist, or is not available to your account."),
+        500: ("Something went wrong", "We could not complete your request. Please try again later."),
+    }
+    title, message = messages[error.code]
+    return render_template("error.html", code=error.code, title=title, message=message), error.code
+
+
 def init_db():
     # 创建这个健身应用需要的数据库表
     # conn 管理事务，closing 确保关闭连接，避免 Windows 下数据库文件被锁住。
@@ -450,7 +464,7 @@ def training(id):
 
     # 不存在或不属于当前用户时统一返回 404，不透露他人的记录是否存在。
     if result is None:
-        return "Training not found", 404
+        abort(404)
 
     # 从计划动作预填训练结果，实际完成的重量和次数仍由用户确认。
     error = None
@@ -664,52 +678,45 @@ def plans():
 
 @app.route("/profile", methods=["GET", "POST"])
 def profile():
+    """个人资料先校验再保存；失败时保留输入，不修改数据库或会话。"""
     if "user_id" not in session:
         return redirect(url_for("login"))
-
-    if request.method == "POST":
-        db = get_db()
-
-        db.execute(
-            """
-            UPDATE User
-            SET
-                user_name = ?,
-                weight = ?,
-                height = ?,
-                goal = ?
-            WHERE user_id = ?;
-            """,
-            (
-                request.form.get("user_name", "").strip(),
-                request.form.get("weight", type=float),
-                request.form.get("height", type=float),
-                request.form.get("goal", "").strip(),
-                session["user_id"],
-            ),
-        )
-        db.commit()
-
-        session["user_name"] = request.form.get("user_name", "").strip()
-
-        return redirect(url_for("profile"))
-
     user = query_db(
-        """
-        SELECT
-            user_name,
-            email,
-            weight,
-            height,
-            goal
-        FROM User
-        WHERE user_id = ?;
-        """,
-        (session["user_id"],),
-        one=True,
+        "SELECT user_name, email, weight, height, goal FROM User WHERE user_id = ?",
+        (session["user_id"],), one=True,
     )
-
-    return render_template("profile.html", user=user)
+    if user is None:
+        session.clear()
+        return redirect(url_for("login"))
+    error = None
+    if request.method == "POST":
+        name = request.form.get("user_name", "").strip()
+        goal = request.form.get("goal", "").strip()
+        measurements = {}
+        if not name or len(name) > 120:
+            error = "Enter a name of 1 to 120 characters."
+        elif len(goal) > 2000:
+            error = "Keep your goal within 2000 characters."
+        # 身高体重仍可留空；填写时必须是有限正数，拒绝 NaN 和无穷大。
+        for field, label in (("weight", "Weight"), ("height", "Height")):
+            raw = request.form.get(field, "").strip()
+            try:
+                value = float(raw) if raw else None
+                if value is not None and (not math.isfinite(value) or value <= 0):
+                    raise ValueError
+                measurements[field] = value
+            except (ValueError, OverflowError):
+                if not error:
+                    error = f"{label} must be a positive, finite number or left blank."
+        if not error:
+            db = get_db()
+            with db:
+                db.execute("UPDATE User SET user_name = ?, weight = ?, height = ?, goal = ? "
+                           "WHERE user_id = ?", (name, measurements["weight"],
+                           measurements["height"], goal, session["user_id"]))
+            session["user_name"] = name
+            return redirect(url_for("profile"))
+    return render_template("profile.html", user=user, error=error), (400 if error else 200)
 
 
 # 训练日统一使用固定值，防止伪造表单写入任意名称。
@@ -905,4 +912,5 @@ def edit_plan_exercise(plan_id, entry_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # 默认关闭调试页面，使 500 错误显示友好提示而不是内部异常。
+    app.run(debug=False)

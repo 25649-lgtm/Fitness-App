@@ -501,7 +501,7 @@ body {
 
     top: calc(100% + 10px);
 
-    left: 90%;
+    left: 50%;
 
     min-width: 140px;
     padding: 6px;
@@ -517,7 +517,8 @@ body {
     opacity: 0;
     visibility: hidden;
 
-    transform: translateX(800%) translateY(-5px);
+    /* 隐藏时仍留在按钮附近，避免移到屏幕外造成手机横向滚动。 */
+    transform: translateX(-50%) translateY(-5px);
 
     transition: 0.6s;
 
@@ -525,7 +526,8 @@ body {
 }
 
 
-.profile-menu:hover .profile-dropdown {
+.profile-menu:hover .profile-dropdown,
+.profile-menu:focus-within .profile-dropdown {
     opacity: 1;
     visibility: visible;
 

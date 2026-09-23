@@ -470,6 +470,85 @@ class AuthenticationTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT weight, sets, reps FROM WorkNotes WHERE notes = 'Completed today'").fetchone(), (45.5, 4, 10))
             self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 2)
 
+    def test_profile_validation_preserves_data_and_input(self):
+        """异常资料不能改变数据库或登录名，失败页面保留输入。"""
+        self.register()
+        self.login()
+        valid = {"user_name": "Updated", "weight": "70.5", "height": "175", "goal": "Build strength"}
+        for change in ({"user_name": " "}, {"user_name": "x" * 121}, {"goal": "x" * 2001}):
+            self.assertEqual(self.post_form("/profile", {**valid, **change}).status_code, 400)
+        for field in ("weight", "height"):
+            for value in ("0", "-1", "NaN", "inf", "1e999", "abc"):
+                response = self.post_form("/profile", {**valid, field: value})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(b"Build strength", response.data)
+                self.assertIn(b'value="Updated"', response.data)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT user_name, weight, height FROM User").fetchone(), ("Test", None, None))
+        with self.client.session_transaction() as session:
+            self.assertEqual(session["user_name"], "Test")
+        self.assertEqual(self.post_form("/profile", valid).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT user_name, weight, height FROM User").fetchone(), ("Updated", 70.5, 175.0))
+        # 不强迫用户填写身体数据，留空仍能保存。
+        self.assertEqual(self.post_form("/profile", {**valid, "weight": "", "height": ""}).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT weight, height FROM User").fetchone(), (None, None))
+
+    def test_friendly_error_pages_preserve_status_without_internal_details(self):
+        """400、404、真实未捕获异常的 500 都有导航，不泄露异常内容。"""
+        response = self.client.post("/profile", data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b"Back to Login", response.data)
+        self.assertIn(b"Unable to submit", response.data)
+        self.register()
+        self.login()
+        for path in ("/missing-page", "/training/999999", "/notes/999999/edit"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 404)
+            self.assertIn(b"Page not found", response.data)
+            self.assertIn(b"Back to Home", response.data)
+        # 关闭测试异常传播来真实经过 Flask 的 500 处理路径，仅在临时配置内生效。
+        with patch.dict(gym.app.config, {"PROPAGATE_EXCEPTIONS": False, "DEBUG": False}):
+            with patch.object(gym, "query_db", side_effect=RuntimeError("private database path")):
+                with self.assertLogs(gym.app.logger.name, level="ERROR"):
+                    response = self.client.get("/homepage")
+        self.assertEqual(response.status_code, 500)
+        self.assertIn(b"Something went wrong", response.data)
+        self.assertIn(b"Back to Home", response.data)
+        self.assertNotIn(b"private database path", response.data)
+        self.assertNotIn(b"Traceback", response.data)
+
+    def test_complete_workflow_from_signup_to_cleanup(self):
+        """连续执行注册、计划、训练、编辑删除与退出，验证页面间衔接。"""
+        self.assertEqual(self.register().status_code, 302)
+        self.assertEqual(self.login().status_code, 302)
+        self.assertEqual(self.post_form("/profile", {"user_name": "Athlete", "weight": "68", "height": "172"}).status_code, 302)
+        response = self.post_form("/workout-plan", {"plan_name": "Flow", "date": "2026-09-01", "training_days": "Monday"})
+        self.assertEqual(response.status_code, 302)
+        plan_id = int(response.location.split("/")[2])
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            day_id = db.execute("SELECT day_id FROM WorkDay").fetchone()[0]
+            exercise_id = db.execute("SELECT exercise_id FROM Exercise LIMIT 1").fetchone()[0]
+        self.assertEqual(self.post_form(response.location, {"day_id": day_id, "exercise_id": exercise_id, "sets": "3", "reps": "8"}).status_code, 302)
+        response, context = self.dashboard_context(gym.calendar_date(2026, 9, 28))
+        entry_id = context["workouts"][0]["workout_exercise_id"]
+        self.assertIn(f"/training/{entry_id}".encode(), response.data)
+        self.assertEqual(self.client.get(f"/training/{entry_id}").status_code, 200)
+        values = {"exercise_id": exercise_id, "date": "2026-09-28", "weight": "25", "sets": "3", "reps": "8", "notes": "Full workflow"}
+        self.assertEqual(self.post_form(f"/training/{entry_id}", values).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            note_id = db.execute("SELECT notes_id FROM WorkNotes").fetchone()[0]
+        self.assertEqual(self.post_form(f"/notes/{note_id}/edit", {**values, "reps": "10"}).status_code, 302)
+        self.assertEqual(self.post_form(f"/workout-plan/{plan_id}/delete", {"confirm": "yes"}).status_code, 302)
+        self.assertIn(b"Full workflow", self.client.get("/notes").data)
+        self.assertEqual(self.post_form(f"/notes/{note_id}/delete", {"confirm": "yes"}).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 0)
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.post_form("/logout")
+        self.assertEqual(self.client.get("/homepage").status_code, 302)
+
     def test_old_schema_migrates_once_and_preserves_login(self):
         """模拟旧数据库，验证密码迁移后可登录且重复初始化不会再次哈希。"""
         original = gym.DATABASE

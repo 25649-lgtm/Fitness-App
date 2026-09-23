@@ -48,6 +48,8 @@
                 <p>{{ user["email"] }}</p>
             </div>
 
+            <!-- 错误提示置于表单前，提交失败保留刚输入的资料。 -->
+            {% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
             <form method="POST">
                 <!-- 验证提交来自当前会话，防止跨站请求伪造。 -->
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -59,7 +61,8 @@
                         type="text"
                         id="user_name"
                         name="user_name"
-                        value="{{ user['user_name'] }}"
+                        maxlength="120"
+                        value="{{ request.form.get('user_name', user['user_name']) }}"
                         required
                     >
                 </div>
@@ -71,9 +74,9 @@
                         type="number"
                         id="weight"
                         name="weight"
-                        step="0.1"
-                        min="0"
-                        value="{{ user['weight'] or '' }}"
+                        step="any"
+                        min="0.1"
+                        value="{{ request.form.get('weight', user['weight'] if user['weight'] is not none else '') }}"
                     >
                 </div>
 
@@ -84,9 +87,9 @@
                         type="number"
                         id="height"
                         name="height"
-                        step="0.1"
-                        min="0"
-                        value="{{ user['height'] or '' }}"
+                        step="any"
+                        min="0.1"
+                        value="{{ request.form.get('height', user['height'] if user['height'] is not none else '') }}"
                     >
                 </div>
 
@@ -96,8 +99,9 @@
                     <textarea
                         id="goal"
                         name="goal"
+                        maxlength="2000"
                         rows="3"
-                    >{{ user["goal"] or "" }}</textarea>
+                    >{{ request.form.get("goal", user["goal"] or "") }}</textarea>
                 </div>
 
                 <button

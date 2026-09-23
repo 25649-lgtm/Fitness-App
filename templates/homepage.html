@@ -38,7 +38,8 @@
 
                 <div class="profile-menu">
 
-                    <span class="profile-name">
+                    <!-- 允许键盘聚焦，配合 focus-within 展开账户菜单。 -->
+                    <span class="profile-name" tabindex="0">
                         {{ user["user_name"] }} ▼
                     </span>
 
