@@ -82,7 +82,7 @@
 
             <div class="card-header">
                 <h2>Today's Workout</h2>
-                <span class="card-label">Training Plan</span>
+                <span class="card-label">{{ today.isoformat() }}</span>
             </div>
 
             {% if workouts %}
@@ -95,7 +95,7 @@
                             <h3>{{ workout["exercise_name"] }}</h3>
 
                             <p>
-                                {{ workout["day_name"] }}
+                                {{ workout["plan_name"] }} · {{ workout["day_name"] }}
                                 ·
                                 {{ workout["equipment"] }}
                             </p>
@@ -108,27 +108,27 @@
                             </strong>
 
                             <span>Sets × Reps</span>
+                            <!-- 每条动作使用真实 ID，避免跳到固定或他人的训练记录。 -->
+                            <a href="{{ url_for('training', id=workout['workout_exercise_id']) }}" class="primary-button">Start Workout</a>
                         </div>
 
                     </div>
 
                 {% endfor %}
 
-                <a href="/training/1" class="primary-button">
-                    Start Workout
-                </a>
+
 
             {% else %}
 
                 <div class="empty-message">
-                    <p>No workout has been planned yet.</p>
+                    <p>No exercises scheduled for today. View your plans or add a routine.</p>
 
                     <a href="{{ url_for('workout_plan') }}" class="menu-button">
                         <span class="menu-icon">+</span>
 
                         <div>
                             <strong>Create Workout Plan</strong>
-                            <p>Create your first workout plan</p>
+                            <p>Add a workout plan</p>
                             </div>
                     </a>
                 </div>
@@ -143,7 +143,7 @@
 
             <div class="card-header">
                 <h2>Weekly Progress</h2>
-                <span class="card-label">This Week</span>
+                <span class="card-label">{{ week_start.isoformat() }} – {{ week_last.isoformat() }}</span>
             </div>
 
             <div class="progress-statistics">
@@ -154,7 +154,7 @@
                     </span>
 
                     <span class="progress-title">
-                        Workouts Recorded
+                        Exercise Records
                     </span>
                 </div>
 
@@ -180,11 +180,7 @@
 
             </div>
 
-            <div class="progress-bar">
-
-                <div class="progress-bar-fill"></div>
-
-            </div>
+<!-- 未设定每周目标，移除固定进度条，避免展示虚假的完成比例。 -->
 
             <p class="progress-message">
                 Keep recording your workouts to build a consistent routine.

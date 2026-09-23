@@ -381,6 +381,95 @@ class AuthenticationTests(unittest.TestCase):
             self.assertNotIn(b'type="checkbox"', page.data)
             self.assertIn(b'type="submit" name="confirm" value="yes"', page.data)
 
+    def dashboard_context(self, date):
+        """固定本地日期并捕获模板数据，直接验证日期筛选和统计数值。"""
+        from flask import template_rendered
+        captured = []
+        def capture(sender, template, context, **extra):
+            captured.append(context)
+        with template_rendered.connected_to(capture, gym.app):
+            with patch.object(gym, "today_date", return_value=date):
+                response = self.client.get("/homepage")
+        self.assertEqual(response.status_code, 200)
+        return response, captured[0]
+
+    def test_today_filters_day_start_date_and_account(self):
+        """今日显示所有已开始的本人计划，兼容旧日期，排除其他日期与他人计划。"""
+        plan_id, day_id, exercise_id, entry_id = self.make_plan()
+        today = gym.calendar_date(2026, 9, 28)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            user_id = db.execute("SELECT user_id FROM WorkPlan WHERE plan_id = ?", (plan_id,)).fetchone()[0]
+            other_id = db.execute("INSERT INTO User (user_name, email, password, password_hashed) VALUES ('Other', 'isolated@example.com', 'unused', 1)").lastrowid
+            for name, start, day, owner in (
+                ("Future", "2026-10-01", "Monday", user_id),
+                ("Wrong day", "2026-09-01", "Tuesday", user_id),
+                ("Other user", "2026-09-01", "Monday", other_id),
+                ("Legacy date", "20260928", "Monday", user_id),
+            ):
+                new_plan = db.execute("INSERT INTO WorkPlan (user_id, plan_name, date) VALUES (?, ?, ?)", (owner, name, start)).lastrowid
+                new_day = db.execute("INSERT INTO WorkDay (plan_id, day_name) VALUES (?, ?)", (new_plan, day)).lastrowid
+                db.execute("INSERT INTO WorkoutExercise (day_id, exercise_id, sets, reps) VALUES (?, ?, 2, 5)", (new_day, exercise_id))
+        response, context = self.dashboard_context(today)
+        self.assertEqual({row["plan_name"] for row in context["workouts"]}, {"Original", "Legacy date"})
+        for row in context["workouts"]:
+            self.assertIn(f'/training/{row["workout_exercise_id"]}'.encode(), response.data)
+        response, context = self.dashboard_context(gym.calendar_date(2026, 9, 30))
+        self.assertEqual(context["workouts"], [])
+        self.assertIn(b"No exercises scheduled for today", response.data)
+        self.assertNotIn(b">Start Workout</a>", response.data)
+
+    def test_weekly_counts_monday_through_sunday_only(self):
+        """验证上周日、本周一、本周日及下周一边界，并排除其他账户。"""
+        plan_id, _, exercise_id, _ = self.make_plan()
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            user_id = db.execute("SELECT user_id FROM WorkPlan WHERE plan_id = ?", (plan_id,)).fetchone()[0]
+            other_id = db.execute("INSERT INTO User (user_name, email, password, password_hashed) VALUES ('Other', 'weekly@example.com', 'unused', 1)").lastrowid
+            for date, owner in (("2026-09-27", user_id), ("2026-09-28", user_id),
+                                ("20261004", user_id), ("2026-10-05", user_id),
+                                ("2026-09-29", other_id)):
+                db.execute("INSERT INTO WorkNotes (user_id, exercise_id, date, sets, reps) VALUES (?, ?, ?, 3, 8)", (owner, exercise_id, date))
+        for today in (gym.calendar_date(2026, 9, 28), gym.calendar_date(2026, 10, 4)):
+            _, context = self.dashboard_context(today)
+            self.assertEqual(context["stats"]["workout_count"], 2)
+            self.assertEqual(context["stats"]["exercise_count"], 1)
+            self.assertEqual(context["week_start"], gym.calendar_date(2026, 9, 28))
+            self.assertEqual(context["week_last"], gym.calendar_date(2026, 10, 4))
+        _, context = self.dashboard_context(gym.calendar_date(2026, 10, 5))
+        self.assertEqual(context["stats"]["workout_count"], 1)
+        _, context = self.dashboard_context(gym.calendar_date(2026, 11, 1))
+        self.assertEqual(context["stats"]["workout_count"], 0)
+
+    def test_start_workout_prefills_and_saves_actual_results(self):
+        """训练页预填本人动作，错误输入不写入；保存实际结果后首页统计更新。"""
+        _, _, exercise_id, entry_id = self.make_plan()
+        route = f"/training/{entry_id}"
+        with patch.object(gym, "today_date", return_value=gym.calendar_date(2026, 9, 28)):
+            page = self.client.get(route)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'Record your results', page.data)
+        self.assertIn(b'value="2026-09-28"', page.data)
+        self.assertIn(b'value="3"', page.data)
+        data = {"exercise_id": exercise_id, "date": "2026-09-28", "weight": "45.5", "sets": "4", "reps": "10", "notes": "Completed today"}
+        self.assertEqual(self.client.post(route, data=data).status_code, 400)
+        self.assertEqual(self.post_form(route, {**data, "sets": "-1"}).status_code, 400)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            other_exercise = db.execute("SELECT exercise_id FROM Exercise WHERE exercise_id != ? LIMIT 1", (exercise_id,)).fetchone()[0]
+        self.assertEqual(self.post_form(route, {**data, "exercise_id": other_exercise}).status_code, 400)
+        response = self.post_form(route, data)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.location.endswith("/notes"))
+        self.assertIn(b"Completed today", self.client.get("/notes").data)
+        _, context = self.dashboard_context(gym.calendar_date(2026, 9, 28))
+        self.assertEqual(context["stats"]["workout_count"], 1)
+        self.post_form("/logout")
+        self.register("intruder@example.com")
+        self.login(email="intruder@example.com")
+        self.assertEqual(self.post_form(route, data).status_code, 404)
+        self.assertEqual(self.post_form("/training/999999", data).status_code, 404)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT weight, sets, reps FROM WorkNotes WHERE notes = 'Completed today'").fetchone(), (45.5, 4, 10))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 2)
+
     def test_old_schema_migrates_once_and_preserves_login(self):
         """模拟旧数据库，验证密码迁移后可登录且重复初始化不会再次哈希。"""
         original = gym.DATABASE

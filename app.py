@@ -2,7 +2,7 @@ import os
 import math
 import secrets
 import sqlite3
-from datetime import date as calendar_date
+from datetime import date as calendar_date, timedelta
 from contextlib import closing
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -316,6 +316,11 @@ def login():
     return render_template("login.html", error=error)
 
 
+def today_date():
+    """使用运行电脑的本地日期，测试时可固定日期验证跨周边界。"""
+    return calendar_date.today()
+
+
 @app.route("/homepage")
 def homepage():
     if "user_id" not in session:
@@ -330,9 +335,18 @@ def homepage():
     """
     user = query_db(user_sql, (user_id,), one=True)
 
-    # 查找用户训练计划里的所有动作
+    # 周一到下周一采用左闭右开范围；今日动作还需满足计划已开始。
+    today = today_date()
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=7)
+    # 按数字星期索引匹配，避免系统语言影响英文训练日名称。
+    weekday = TRAINING_DAYS[today.weekday()]
+    # 日期去掉连字符后比较，同时兼容旧版 YYYYMMDD 数据。
+    # 查找当前用户今天安排的动作
     workout_sql = """
         SELECT
+            WorkoutExercise.workout_exercise_id,
+            WorkPlan.plan_name,
             WorkDay.day_name,
             Exercise.exercise_name,
             Exercise.equipment,
@@ -345,10 +359,11 @@ def homepage():
             ON WorkDay.plan_id = WorkPlan.plan_id
         JOIN Exercise
             ON WorkoutExercise.exercise_id = Exercise.exercise_id
-        WHERE WorkPlan.user_id = ?
-        ORDER BY WorkDay.day_id;
+        WHERE WorkPlan.user_id = ? AND WorkDay.day_name = ?
+        AND REPLACE(WorkPlan.date, '-', '') <= ?
+        ORDER BY WorkPlan.plan_id, WorkDay.day_id, WorkoutExercise.workout_exercise_id;
     """
-    workouts = query_db(workout_sql, (user_id,))
+    workouts = query_db(workout_sql, (user_id, weekday, today.strftime("%Y%m%d")))
 
     notes_sql = """
         SELECT
@@ -367,15 +382,17 @@ def homepage():
     """
     recent_notes = query_db(notes_sql, (user_id,))
 
-    # 统计训练记录并显示在进度卡片中
+    # 只统计本周训练记录；每条动作记录计为一条，不当作整次训练。
     stats_sql = """
         SELECT
             COUNT(*) AS workout_count,
             COUNT(DISTINCT exercise_id) AS exercise_count
         FROM WorkNotes
-        WHERE user_id = ?;
+        WHERE user_id = ?
+        AND REPLACE(date, '-', '') >= ? AND REPLACE(date, '-', '') < ?;
     """
-    stats = query_db(stats_sql, (user_id,), one=True)
+    stats = query_db(stats_sql, (user_id, week_start.strftime("%Y%m%d"),
+                                week_end.strftime("%Y%m%d")), one=True)
 
     return render_template(
         "homepage.html",
@@ -383,6 +400,9 @@ def homepage():
         workouts=workouts,
         recent_notes=recent_notes,
         stats=stats,
+        today=today,
+        week_start=week_start,
+        week_last=week_end - timedelta(days=1),
     )
 
 
@@ -393,7 +413,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/training/<int:id>")
+@app.route("/training/<int:id>", methods=["GET", "POST"])
 def training(id):
     # 训练详情属于私人数据，未登录用户先返回登录页。
     if "user_id" not in session:
@@ -402,6 +422,7 @@ def training(id):
     sql = """
         SELECT
             WorkoutExercise.workout_exercise_id,
+            Exercise.exercise_id,
             User.user_name,
             WorkPlan.plan_name,
             WorkPlan.description AS plan_description,
@@ -431,7 +452,24 @@ def training(id):
     if result is None:
         return "Training not found", 404
 
-    return str(dict(result))
+    # 从计划动作预填训练结果，实际完成的重量和次数仍由用户确认。
+    error = None
+    if request.method == "POST":
+        values, error = validate_note_form()
+        if not error and values[0] != result["exercise_id"]:
+            error = "Record the exercise shown in this workout."
+        if not error:
+            db = get_db()
+            with db:
+                db.execute(
+                    "INSERT INTO WorkNotes (exercise_id, date, weight, sets, reps, notes, user_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)", (*values, session["user_id"]),
+                )
+            return redirect(url_for("notes"))
+    defaults = {"exercise_id": result["exercise_id"], "date": today_date().isoformat(),
+                "sets": result["sets"], "reps": result["reps"], "weight": "", "notes": ""}
+    return render_template("training.html", training=result, note=defaults,
+                           exercises=[result], error=error), (400 if error else 200)
 
 
 @app.route("/exercises")
