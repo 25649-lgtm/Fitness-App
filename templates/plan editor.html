@@ -1,0 +1,24 @@
+{% extends 'plan base.html' %}
+{% block title %}{{ 'Edit Plan' if plan else 'Create Plan' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit Plan' if plan else 'Create Plan' }}</h1>
+{% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
+<!-- 校验失败时保留提交值，避免用户重新填写整份表单。 -->
+<form method="POST" data-plan-navigation><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="form-group"><label for="plan_name">Plan name</label>
+<input id="plan_name" name="plan_name" maxlength="120" required value="{{ values.plan_name }}"></div>
+<div class="form-group"><label for="description">Description</label>
+<textarea id="description" name="description" maxlength="2000">{{ values.description or '' }}</textarea></div>
+<div class="form-group"><label for="date">Start date</label>
+<input id="date" name="date" type="date" required value="{{ values.date }}"></div>
+<fieldset><legend>Training days</legend>
+{% for day in weekdays %}<label><input type="checkbox" name="training_days" value="{{ day }}" {% if day in selected_days %}checked{% endif %}> {{ day }}</label> {% endfor %}
+</fieldset>
+{% if plan %}
+<!-- 移除日期前明确提示影响，确认字段由服务器再次验证。 -->
+<p>Deselecting a day removes its planned exercises. Recorded workout history is kept.</p>
+<label><input type="checkbox" name="confirm_remove_days" value="yes"> I confirm removal of deselected days and their exercises.</label>
+{% endif %}
+<div class="plan-actions"><button class="primary-button" type="submit">Save Plan</button>
+<a class="secondary-button" href="{{ url_for('plans') }}">Cancel</a></div>
+</form>{% endblock %}

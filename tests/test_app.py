@@ -158,6 +158,229 @@ class AuthenticationTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         gym.load_secret_key()
 
+    def make_plan(self):
+        """建立包含动作和独立历史记录的计划，供 CRUD 测试使用。"""
+        self.register()
+        self.login()
+        response = self.post_form("/workout-plan", {
+            "plan_name": "Original", "description": "Before", "date": "2026-09-23",
+            "training_days": ["Monday", "Friday"],
+        })
+        self.assertEqual(response.status_code, 302)
+        plan_id = int(response.location.split("/")[2])
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            day_id = db.execute("SELECT day_id FROM WorkDay WHERE plan_id = ? AND day_name = 'Monday'", (plan_id,)).fetchone()[0]
+            exercise_id = db.execute("SELECT exercise_id FROM Exercise LIMIT 1").fetchone()[0]
+        self.post_form(response.location, {"day_id": day_id, "exercise_id": exercise_id, "sets": "3", "reps": "8"})
+        self.post_form("/notes", {"exercise_id": exercise_id, "date": "2026-09-23", "sets": "3", "reps": "8"})
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            entry_id = db.execute("SELECT workout_exercise_id FROM WorkoutExercise WHERE day_id = ?", (day_id,)).fetchone()[0]
+        return plan_id, day_id, exercise_id, entry_id
+
+    def test_plan_edit_preserves_days_and_confirms_removal(self):
+        """保留日期的动作不能丢失；移除日期必须确认，历史记录不受影响。"""
+        plan_id, day_id, _, entry_id = self.make_plan()
+        route = f"/workout-plan/{plan_id}/edit"
+        self.assertEqual(self.client.get(route).status_code, 200)
+        values = {"plan_name": "Updated", "description": "After", "date": "2026-10-01",
+                  "training_days": ["Monday", "Wednesday"], "confirm_remove_days": "yes"}
+        self.assertEqual(self.post_form(route, values).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT plan_name, description, date FROM WorkPlan WHERE plan_id = ?", (plan_id,)).fetchone(), ("Updated", "After", "2026-10-01"))
+            self.assertEqual(db.execute("SELECT day_id FROM WorkoutExercise WHERE workout_exercise_id = ?", (entry_id,)).fetchone()[0], day_id)
+        values.update(training_days=["Wednesday"], confirm_remove_days="")
+        self.assertEqual(self.post_form(route, values).status_code, 400)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkoutExercise").fetchone()[0], 1)
+        values["confirm_remove_days"] = "yes"
+        self.assertEqual(self.post_form(route, values).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkoutExercise").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 1)
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_plan_invalid_input_does_not_change_data(self):
+        """创建与编辑都拒绝空名称、无效日期及伪造训练日。"""
+        plan_id, _, _, _ = self.make_plan()
+        valid = {"plan_name": "Original", "date": "2026-09-23", "training_days": ["Monday", "Friday"]}
+        for route in ("/workout-plan", f"/workout-plan/{plan_id}/edit"):
+            for change in ({"plan_name": " "}, {"date": "2026-02-30"}, {"date": "abc"},
+                           {"training_days": []}, {"training_days": ["Fake"]}):
+                with self.subTest(route=route, change=change):
+                    self.assertEqual(self.post_form(route, {**valid, **change}).status_code, 400)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkPlan").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT plan_name FROM WorkPlan").fetchone()[0], "Original")
+
+    def test_exercise_edit_validation_and_confirmed_delete(self):
+        """组数次数边界校验、正常更新、删除确认均通过数据库结果验证。"""
+        plan_id, day_id, exercise_id, entry_id = self.make_plan()
+        route = f"/workout-plan/{plan_id}/exercises"
+        edit = f"{route}/{entry_id}/edit"
+        delete = f"{route}/{entry_id}/delete"
+        self.assertEqual(self.client.get(edit).status_code, 200)
+        for field in ("sets", "reps"):
+            for value in ("0", "-1", "1.5", "abc", "", "9" * 100):
+                data = {"day_id": day_id, "exercise_id": exercise_id, "sets": "3", "reps": "8", field: value}
+                self.assertEqual(self.post_form(route, data).status_code, 400)
+                self.assertEqual(self.post_form(edit, data).status_code, 400)
+        self.assertEqual(self.post_form(route, {"day_id": day_id, "exercise_id": "999999", "sets": "1", "reps": "1"}).status_code, 400)
+        self.assertEqual(self.post_form(edit, {"sets": "1", "reps": "12"}).status_code, 302)
+        self.assertEqual(self.client.get(delete).status_code, 200)
+        self.assertEqual(self.post_form(delete).status_code, 400)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT sets, reps FROM WorkoutExercise WHERE workout_exercise_id = ?", (entry_id,)).fetchone(), (1, 12))
+        self.assertEqual(self.post_form(delete, {"confirm": "yes"}).status_code, 302)
+        self.assertEqual(self.client.get(edit).status_code, 404)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkoutExercise").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 1)
+
+    def test_plan_delete_preserves_history_and_foreign_keys(self):
+        """确认页和取消不删除数据；确认删除清理关联记录并保留训练历史。"""
+        plan_id, _, _, _ = self.make_plan()
+        route = f"/workout-plan/{plan_id}/delete"
+        self.assertEqual(self.client.get(route).status_code, 200)
+        self.assertEqual(self.post_form(route).status_code, 400)
+        self.assertEqual(self.client.get(f"/workout-plan/{plan_id}/edit").status_code, 200)
+        self.assertEqual(self.post_form(route, {"confirm": "yes"}).status_code, 302)
+        self.assertEqual(self.post_form(route, {"confirm": "yes"}).status_code, 404)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            for table in ("WorkPlan", "WorkDay", "WorkoutExercise"):
+                self.assertEqual(db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 1)
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_management_routes_reject_cross_account_and_missing_csrf(self):
+        """新路由拒绝无令牌、未登录和跨账户请求，伪造动作归属也不能通过。"""
+        plan_id, day_id, exercise_id, entry_id = self.make_plan()
+        routes = [f"/workout-plan/{plan_id}/edit", f"/workout-plan/{plan_id}/delete",
+                  f"/workout-plan/{plan_id}/exercises/{entry_id}/edit",
+                  f"/workout-plan/{plan_id}/exercises/{entry_id}/delete"]
+        for route in routes:
+            self.assertEqual(self.client.post(route, data={"confirm": "yes"}).status_code, 400)
+        self.post_form("/logout")
+        for route in routes:
+            self.assertEqual(self.client.get(route).status_code, 302)
+        self.register("other@example.com")
+        self.login(email="other@example.com")
+        for route in routes:
+            self.assertEqual(self.client.get(route).status_code, 404)
+            self.assertEqual(self.post_form(route, {"confirm": "yes"}).status_code, 404)
+        # 另一个用户即使有自己的计划，也不能借用原用户的动作 ID 或训练日。
+        response = self.post_form("/workout-plan", {"plan_name": "Other", "date": "2026-09-23", "training_days": ["Tuesday"]})
+        other_route = response.location
+        for action in ("edit", "delete"):
+            self.assertEqual(self.post_form(f"{other_route}/{entry_id}/{action}", {"confirm": "yes"}).status_code, 404)
+        self.assertEqual(self.post_form(other_route, {"day_id": day_id, "exercise_id": exercise_id, "sets": "3", "reps": "8"}).status_code, 400)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkoutExercise WHERE workout_exercise_id = ?", (entry_id,)).fetchone()[0], 1)
+
+    def note_fixture(self):
+        """建立一个有历史记录的账户，并取得其记录 ID。"""
+        self.make_plan()
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            note_id, exercise_id = db.execute("SELECT notes_id, exercise_id FROM WorkNotes").fetchone()
+        return note_id, {"exercise_id": exercise_id, "date": "2026-09-23",
+                         "weight": "25.5", "sets": "3", "reps": "8", "notes": "Original"}
+
+    def test_note_edit_updates_all_fields_and_keeps_identity(self):
+        """编辑所有字段后记录 ID 不变，列表显示更新结果。"""
+        note_id, values = self.note_fixture()
+        route = f"/notes/{note_id}/edit"
+        page = self.client.get(route)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'value="2026-09-23"', page.data)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            another_exercise = db.execute("SELECT exercise_id FROM Exercise WHERE exercise_id != ? LIMIT 1", (values["exercise_id"],)).fetchone()[0]
+        values.update(exercise_id=another_exercise, date="2026-09-24", weight="0", sets="1", reps="12", notes="Updated record")
+        self.assertEqual(self.post_form(route, values).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            result = db.execute("SELECT exercise_id, date, weight, sets, reps, notes FROM WorkNotes WHERE notes_id = ?", (note_id,)).fetchone()
+            self.assertEqual(result, (another_exercise, "2026-09-24", 0.0, 1, 12, "Updated record"))
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 1)
+        self.assertIn(b"Updated record", self.client.get("/notes").data)
+        # 留空重量仍允许保存，使用 NULL 表示没有填写。
+        values["weight"] = ""
+        self.assertEqual(self.post_form(route, values).status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertIsNone(db.execute("SELECT weight FROM WorkNotes WHERE notes_id = ?", (note_id,)).fetchone()[0])
+
+    def test_note_invalid_inputs_do_not_insert_or_update(self):
+        """新建和编辑拒绝异常与边界输入，并保留原记录及用户表单内容。"""
+        note_id, values = self.note_fixture()
+        changes = [{"date": value} for value in ("", "2026-02-30", "abc")]
+        changes += [{"weight": value} for value in ("-1", "NaN", "inf", "1e999", "abc")]
+        changes += [{field: value} for field in ("sets", "reps") for value in ("", "0", "-1", "1.5", "abc", "9" * 100)]
+        changes += [{"exercise_id": "999999"}, {"notes": "x" * 2001}]
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            original = db.execute("SELECT exercise_id, date, weight, sets, reps, notes FROM WorkNotes WHERE notes_id = ?", (note_id,)).fetchone()
+        for route in ("/notes", f"/notes/{note_id}/edit"):
+            for change in changes:
+                with self.subTest(route=route, change=change):
+                    response = self.post_form(route, {**values, **change})
+                    self.assertEqual(response.status_code, 400)
+            response = self.post_form(route, {**values, "date": "bad", "notes": "Keep my text"})
+            self.assertIn(b"Keep my text", response.data)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT exercise_id, date, weight, sets, reps, notes FROM WorkNotes WHERE notes_id = ?", (note_id,)).fetchone(), original)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 1)
+
+    def test_note_delete_requires_confirmation_and_preserves_plans(self):
+        """确认前不删除，确认后只删除指定历史记录，计划和其他记录继续保留。"""
+        note_id, values = self.note_fixture()
+        self.post_form("/notes", values)
+        route = f"/notes/{note_id}/delete"
+        self.assertEqual(self.client.get(route).status_code, 200)
+        self.assertEqual(self.post_form(route).status_code, 400)
+        self.assertEqual(self.client.get(f"/notes/{note_id}/edit").status_code, 200)
+        self.assertEqual(self.post_form(route, {"confirm": "yes"}).status_code, 302)
+        for suffix in ("edit", "delete"):
+            self.assertEqual(self.client.get(f"/notes/{note_id}/{suffix}").status_code, 404)
+            self.assertEqual(self.post_form(f"/notes/{note_id}/{suffix}", {**values, "confirm": "yes"}).status_code, 404)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkPlan").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkoutExercise").fetchone()[0], 1)
+            self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
+
+    def test_note_routes_reject_cross_account_anonymous_and_csrf(self):
+        """阻止跨账户、未登录及伪造令牌的编辑和删除，数据库保持不变。"""
+        note_id, values = self.note_fixture()
+        routes = [f"/notes/{note_id}/edit", f"/notes/{note_id}/delete"]
+        for route in routes:
+            for token in (None, "wrong"):
+                data = {**values, "confirm": "yes"}
+                if token is not None:
+                    data["csrf_token"] = token
+                self.assertEqual(self.client.post(route, data=data).status_code, 400)
+        self.post_form("/logout")
+        for route in routes:
+            self.assertEqual(self.client.get(route).status_code, 302)
+            self.assertEqual(self.post_form(route, {**values, "confirm": "yes"}).status_code, 302)
+        self.register("other@example.com")
+        self.login(email="other@example.com")
+        for route in routes:
+            self.assertEqual(self.client.get(route).status_code, 404)
+            self.assertEqual(self.post_form(route, {**values, "confirm": "yes"}).status_code, 404)
+        for suffix in ("edit", "delete"):
+            self.assertEqual(self.client.get(f"/notes/999999/{suffix}").status_code, 404)
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM WorkNotes WHERE notes_id = ?", (note_id,)).fetchone()[0], 1)
+
+    def test_delete_pages_confirm_with_button_without_checkbox(self):
+        """删除确认值由按钮提交，用户无需再勾选额外复选框。"""
+        plan_id, _, _, entry_id = self.make_plan()
+        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
+            note_id = db.execute("SELECT notes_id FROM WorkNotes").fetchone()[0]
+        for route in (f"/workout-plan/{plan_id}/delete",
+                      f"/workout-plan/{plan_id}/exercises/{entry_id}/delete",
+                      f"/notes/{note_id}/delete"):
+            page = self.client.get(route)
+            self.assertEqual(page.status_code, 200)
+            self.assertNotIn(b'type="checkbox"', page.data)
+            self.assertIn(b'type="submit" name="confirm" value="yes"', page.data)
+
     def test_old_schema_migrates_once_and_preserves_login(self):
         """模拟旧数据库，验证密码迁移后可登录且重复初始化不会再次哈希。"""
         original = gym.DATABASE

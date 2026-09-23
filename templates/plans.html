@@ -36,6 +36,8 @@
     </nav>
 
     <main class="container">
+        <!-- 从计划列表直接返回主页。 -->
+        <a class="secondary-button" href="{{ url_for('homepage') }}">Back to Home</a>
 
         <div class="page-heading">
 
@@ -64,6 +66,11 @@
                     </span>
 
                     <h2>{{ plan["plan_name"] }}</h2>
+                    <!-- 编辑和删除入口都由后端检查计划归属。 -->
+                    <div class="plan-actions">
+                        <a class="secondary-button" href="{{ url_for('workout_plan', plan_id=plan['plan_id']) }}">Edit Plan</a>
+                        <a class="primary-button" href="{{ url_for('delete_plan', plan_id=plan['plan_id']) }}">Delete Plan</a>
+                    </div>
 
                     <p>
                         {{ plan["description"] or "No description yet." }}

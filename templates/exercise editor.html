@@ -1,0 +1,13 @@
+{% extends 'plan base.html' %}
+{% block title %}Edit Exercise{% endblock %}
+{% block content %}<h1>Edit {{ entry.exercise_name }}</h1>
+{% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
+<!-- 每个动作独立编辑，错误输入保留在表单中供用户修正。 -->
+<form method="POST" data-plan-navigation><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% for field, label in [('sets', 'Sets'), ('reps', 'Reps')] %}
+<div class="form-group"><label for="{{ field }}">{{ label }}</label>
+<input id="{{ field }}" name="{{ field }}" type="number" min="1" max="2147483647" step="1" required value="{{ request.form.get(field, entry[field]) }}"></div>
+{% endfor %}
+<div class="plan-actions"><button class="primary-button" type="submit">Save Exercise</button>
+<a class="secondary-button" href="{{ cancel_url }}">Cancel</a></div>
+</form>{% endblock %}

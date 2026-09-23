@@ -1,6 +1,8 @@
 import os
+import math
 import secrets
 import sqlite3
+from datetime import date as calendar_date
 from contextlib import closing
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -450,6 +452,90 @@ def exercises():
     return render_template("exercises.html", exercises=results)
 
 
+def validate_note_form():
+    """验证动作、真实日期、有限非负重量及正整数组数次数。"""
+    exercise_id = request.form.get("exercise_id", "")
+    date_text = request.form.get("date", "").strip()
+    weight_text = request.form.get("weight", "").strip()
+    note_text = request.form.get("notes", "").strip()
+    exercise = query_db("SELECT exercise_id FROM Exercise WHERE exercise_id = ?",
+                        (exercise_id,), one=True)
+    if exercise is None:
+        return None, "Select a valid exercise."
+    try:
+        if calendar_date.fromisoformat(date_text).isoformat() != date_text:
+            raise ValueError
+    except ValueError:
+        return None, "Enter a valid date (YYYY-MM-DD)."
+    try:
+        # 重量可以留空；不能将错误数字静默转换为空值，也不能接受 NaN 或无穷大。
+        weight = float(weight_text) if weight_text else None
+        if weight is not None and (not math.isfinite(weight) or weight < 0):
+            raise ValueError
+    except (ValueError, OverflowError):
+        return None, "Weight must be a finite number of 0 or more, or left blank."
+    sets, reps = positive_count("sets"), positive_count("reps")
+    if sets is None or reps is None:
+        return None, "Sets and reps must be whole numbers from 1 to 2147483647."
+    if len(note_text) > 2000:
+        return None, "Keep notes within 2000 characters."
+    return (exercise["exercise_id"], date_text, weight, sets, reps, note_text), None
+
+
+def owned_note(note_id):
+    """按当前账户筛选记录，未知 ID 和他人记录统一返回 404。"""
+    note = query_db(
+        "SELECT notes_id, exercise_id, date, weight, sets, reps, notes "
+        "FROM WorkNotes WHERE notes_id = ? AND user_id = ?",
+        (note_id, session["user_id"]), one=True,
+    )
+    if note is None:
+        abort(404)
+    return note
+
+
+@app.route("/notes/<int:note_id>/edit", methods=["GET", "POST"])
+def edit_note(note_id):
+    """更新本人记录，验证失败时保留表单输入，不写入数据库。"""
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    note = owned_note(note_id)
+    error = None
+    if request.method == "POST":
+        values, error = validate_note_form()
+        if not error:
+            db = get_db()
+            with db:
+                db.execute(
+                    "UPDATE WorkNotes SET exercise_id = ?, date = ?, weight = ?, "
+                    "sets = ?, reps = ?, notes = ? WHERE notes_id = ? AND user_id = ?",
+                    (*values, note_id, session["user_id"]),
+                )
+            return redirect(url_for("notes"))
+    exercises = query_db("SELECT exercise_id, exercise_name FROM Exercise ORDER BY exercise_name")
+    return render_template("note editor.html", note=note, exercises=exercises,
+                           error=error), (400 if error else 200)
+
+
+@app.route("/notes/<int:note_id>/delete", methods=["GET", "POST"])
+def delete_note(note_id):
+    """GET 显示记录摘要；只有带确认值和 CSRF 令牌的 POST 才删除本人记录。"""
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    note = owned_note(note_id)
+    if request.method == "POST":
+        if request.form.get("confirm") != "yes":
+            abort(400, description="Please confirm deletion.")
+        db = get_db()
+        with db:
+            db.execute("DELETE FROM WorkNotes WHERE notes_id = ? AND user_id = ?",
+                       (note_id, session["user_id"]))
+        return redirect(url_for("notes"))
+    exercise = query_db("SELECT exercise_name FROM Exercise WHERE exercise_id = ?",
+                        (note["exercise_id"],), one=True)
+    return render_template("note deletion.html", note=note, exercise=exercise)
+
+
 @app.route("/notes", methods=["GET", "POST"])
 def notes():
     if "user_id" not in session:
@@ -457,48 +543,16 @@ def notes():
 
     error = None
 
+    # 添加与编辑使用相同的服务端校验，防止绕过 HTML 限制写入无效数据。
     if request.method == "POST":
-        exercise_id = request.form.get("exercise_id", type=int)
-        date = request.form.get("date", "").strip()
-        weight = request.form.get("weight", type=float)
-        sets = request.form.get("sets", type=int)
-        reps = request.form.get("reps", type=int)
-        note_text = request.form.get("notes", "").strip()
-
-        if not exercise_id or not date or not sets or not reps:
-            error = (
-                "Please complete the exercise, date, "
-                "sets and reps fields."
-            )
-
-        else:
+        values, error = validate_note_form()
+        if not error:
             db = get_db()
-
-            db.execute(
-                """
-                INSERT INTO WorkNotes (
-                    user_id,
-                    exercise_id,
-                    date,
-                    weight,
-                    sets,
-                    reps,
-                    notes
+            with db:
+                db.execute(
+                    "INSERT INTO WorkNotes (exercise_id, date, weight, sets, reps, notes, user_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)", (*values, session["user_id"]),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?);
-                """,
-                (
-                    session["user_id"],
-                    exercise_id,
-                    date,
-                    weight,
-                    sets,
-                    reps,
-                    note_text,
-                ),
-            )
-            db.commit()
-
             return redirect(url_for("notes"))
 
     # 只显示当前用户自己的训练记录
@@ -537,7 +591,7 @@ def notes():
         notes=results,
         exercises=exercise_options,
         error=error,
-    )
+    ), (400 if error else 200)
 
 
 @app.route("/plans")
@@ -620,231 +674,196 @@ def profile():
     return render_template("profile.html", user=user)
 
 
+# 训练日统一使用固定值，防止伪造表单写入任意名称。
+TRAINING_DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def owned_plan(plan_id):
+    """只查询当前用户的计划，不存在或属于他人时统一返回 404。"""
+    plan = query_db(
+        "SELECT plan_id, plan_name, description, date FROM WorkPlan "
+        "WHERE plan_id = ? AND user_id = ?",
+        (plan_id, session["user_id"]), one=True,
+    )
+    if plan is None:
+        abort(404)
+    return plan
+
+
+def validate_plan_form():
+    """创建和编辑共用校验，错误时保留用户输入供页面重新显示。"""
+    values = {key: request.form.get(key, "").strip()
+              for key in ("plan_name", "description", "date")}
+    days = list(dict.fromkeys(request.form.getlist("training_days")))
+    error = None
+    if not values["plan_name"] or len(values["plan_name"]) > 120:
+        error = "Enter a plan name of 1 to 120 characters."
+    elif len(values["description"]) > 2000:
+        error = "Keep the description within 2000 characters."
+    else:
+        try:
+            parsed = calendar_date.fromisoformat(values["date"])
+            if parsed.isoformat() != values["date"]:
+                raise ValueError
+        except ValueError:
+            error = "Enter a valid start date (YYYY-MM-DD)."
+    if not error and (not days or any(day not in TRAINING_DAYS for day in days)):
+        error = "Select at least one valid training day."
+    return values, days, error
+
+
+def positive_count(field):
+    """组数和次数只能是 SQLite 可安全保存的正整数，拒绝小数与超大输入。"""
+    raw = request.form.get(field, "").strip()
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 10:
+        return None
+    value = int(raw)
+    return value if 1 <= value <= 2147483647 else None
+
+
 @app.route("/workout-plan", methods=["GET", "POST"])
-def workout_plan():
+@app.route("/workout-plan/<int:plan_id>/edit", methods=["GET", "POST"])
+def workout_plan(plan_id=None):
+    """创建或编辑计划；保留未移除训练日的动作和原有 ID。"""
     if "user_id" not in session:
         return redirect(url_for("login"))
-
-    user_id = session["user_id"]
+    plan = owned_plan(plan_id) if plan_id is not None else None
+    existing_days = query_db(
+        "SELECT day_id, day_name FROM WorkDay WHERE plan_id = ?", (plan_id,)
+    ) if plan else []
+    values = dict(plan) if plan else {"plan_name": "", "description": "", "date": ""}
+    # 兼容旧版 YYYYMMDD 日期，在 HTML 日期输入框中转换为标准格式。
+    stored_date = str(values["date"] or "")
+    if len(stored_date) == 8 and stored_date.isdigit():
+        values["date"] = f"{stored_date[:4]}-{stored_date[4:6]}-{stored_date[6:]}"
+    selected_days = [day["day_name"] for day in existing_days]
     error = None
-
     if request.method == "POST":
-        plan_name = request.form.get("plan_name", "").strip()
-        description = request.form.get("description", "").strip()
-        date = request.form.get("date", "").replace("-", "")
+        values, selected_days, error = validate_plan_form()
+        removed = [day for day in existing_days if day["day_name"] not in selected_days]
+        # 移除训练日会删除其计划动作，必须获得用户在表单中的明确确认。
+        if not error and removed and request.form.get("confirm_remove_days") != "yes":
+            error = "Confirm removal of deselected days and their planned exercises."
+        if not error:
+            db = get_db()
+            with db:
+                if plan:
+                    db.execute("UPDATE WorkPlan SET plan_name = ?, description = ?, date = ? "
+                               "WHERE plan_id = ?", (*values.values(), plan_id))
+                    for day in removed:
+                        db.execute("DELETE FROM WorkoutExercise WHERE day_id = ?", (day["day_id"],))
+                        db.execute("DELETE FROM WorkDay WHERE day_id = ?", (day["day_id"],))
+                else:
+                    plan_id = db.execute(
+                        "INSERT INTO WorkPlan (plan_name, description, date, user_id) VALUES (?, ?, ?, ?)",
+                        (*values.values(), session["user_id"]),
+                    ).lastrowid
+                # 新增日期只创建一次，不重建原来保留的日期。
+                old_names = {day["day_name"] for day in existing_days}
+                for day_name in selected_days:
+                    if day_name not in old_names:
+                        db.execute("INSERT INTO WorkDay (plan_id, day_name) VALUES (?, ?)",
+                                   (plan_id, day_name))
+            return redirect(url_for("add_plan_exercises", plan_id=plan_id))
+    return render_template("plan editor.html", plan=plan, values=values,
+                           selected_days=selected_days, weekdays=TRAINING_DAYS, error=error), (400 if error else 200)
 
-        # 创建计划前检查重要资料
-        if not plan_name:
-            error = "Please enter a plan name."
 
-        elif not date:
-            error = "Please select a start date."
+@app.route("/workout-plan/<int:plan_id>/delete", methods=["GET", "POST"])
+def delete_plan(plan_id):
+    """先显示确认页，再按外键依赖顺序删除；独立训练历史始终保留。"""
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    plan = owned_plan(plan_id)
+    if request.method == "POST":
+        if request.form.get("confirm") != "yes":
+            abort(400, description="Please confirm deletion.")
+        db = get_db()
+        with db:
+            db.execute("DELETE FROM WorkoutExercise WHERE day_id IN "
+                       "(SELECT day_id FROM WorkDay WHERE plan_id = ?)", (plan_id,))
+            db.execute("DELETE FROM WorkDay WHERE plan_id = ?", (plan_id,))
+            db.execute("DELETE FROM WorkPlan WHERE plan_id = ?", (plan_id,))
+        return redirect(url_for("plans"))
+    return render_template("confirm deletion.html", title="Delete workout plan",
+                           item_name=plan["plan_name"], cancel_url=url_for("plans"))
 
-        elif not request.form.getlist("training_days"):
-            error = "Please select at least one training day."
 
+@app.route("/workout-plan/<int:plan_id>/exercises", methods=["GET", "POST"])
+def add_plan_exercises(plan_id):
+    """添加动作前校验训练日归属、动作是否存在，以及组数和次数。"""
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    plan = owned_plan(plan_id)
+    error = None
+    if request.method == "POST":
+        day_id = request.form.get("day_id", "")
+        exercise_id = request.form.get("exercise_id", "")
+        sets, reps = positive_count("sets"), positive_count("reps")
+        day = query_db("SELECT day_id FROM WorkDay WHERE day_id = ? AND plan_id = ?",
+                       (day_id, plan_id), one=True)
+        exercise = query_db("SELECT exercise_id FROM Exercise WHERE exercise_id = ?",
+                            (exercise_id,), one=True)
+        if day is None or exercise is None:
+            error = "Select a valid training day and exercise."
+        elif sets is None or reps is None:
+            error = "Sets and reps must be whole numbers from 1 to 2147483647."
         else:
             db = get_db()
-
-            cursor = db.execute(
-                """
-                INSERT INTO WorkPlan (
-                    user_id,
-                    plan_name,
-                    description,
-                    date
-                )
-                VALUES (?, ?, ?, ?);
-                """,
-                (
-                    user_id,
-                    plan_name,
-                    description,
-                    int(date)
-                )
-            )
-
-            plan_id = cursor.lastrowid
-
-            # 为每一个选择的训练日建立一条 WorkDay 记录
-            selected_days = request.form.getlist("training_days")
-
-            for day_name in selected_days:
-                db.execute(
-                    """
-                    INSERT INTO WorkDay (
-                        plan_id,
-                        day_name
-                    )
-                    VALUES (?, ?);
-                    """,
-                    (plan_id, day_name)
-                )
-
-            db.commit()
-
-            db.commit()
-
-            return redirect(
-                url_for(
-                    "add_plan_exercises",
-                    plan_id=plan_id
-                )
-                )
-
-    return render_template(
-        "workout plan.html",
-        error=error
-                )
+            with db:
+                db.execute("INSERT INTO WorkoutExercise (day_id, exercise_id, sets, reps) "
+                           "VALUES (?, ?, ?, ?)", (day_id, exercise_id, sets, reps))
+            return redirect(url_for("add_plan_exercises", plan_id=plan_id))
+    days = query_db("SELECT day_id, day_name FROM WorkDay WHERE plan_id = ? ORDER BY day_id", (plan_id,))
+    exercises = query_db("SELECT exercise_id, exercise_name, equipment FROM Exercise ORDER BY exercise_name")
+    plan_exercises = query_db(
+        "SELECT we.workout_exercise_id, we.day_id, d.day_name, e.exercise_name, "
+        "e.equipment, we.sets, we.reps FROM WorkoutExercise we "
+        "JOIN WorkDay d ON we.day_id = d.day_id JOIN Exercise e ON we.exercise_id = e.exercise_id "
+        "WHERE d.plan_id = ? ORDER BY d.day_id, we.workout_exercise_id", (plan_id,))
+    return render_template("add exercises.html", plan=plan, days=days, exercises=exercises,
+                           plan_exercises=plan_exercises, error=error), (400 if error else 200)
 
 
-@app.route(
-    "/workout-plan/<int:plan_id>/exercises",
-    methods=["GET", "POST"]
-        )
-def add_plan_exercises(plan_id):
-    # 检查用户是否登录
+@app.route("/workout-plan/<int:plan_id>/exercises/<int:entry_id>/edit", methods=["GET", "POST"])
+@app.route("/workout-plan/<int:plan_id>/exercises/<int:entry_id>/delete", methods=["GET", "POST"], endpoint="delete_plan_exercise")
+def edit_plan_exercise(plan_id, entry_id):
+    """仅编辑或移除当前计划中的动作；伪造其他计划的动作 ID 返回 404。"""
     if "user_id" not in session:
         return redirect(url_for("login"))
-
-    user_id = session["user_id"]
-    # 检查这个计划是不是当前用户的
-    # 防止用户修改其他人的计划
-    plan = query_db(
-        """
-        SELECT
-            plan_id,
-            plan_name,
-            description
-        FROM WorkPlan
-        WHERE plan_id = ?
-        AND user_id = ?;
-        """,
-        (plan_id, user_id),
-        one=True,
-    )
-
-    if plan is None:
-        return "Workout plan not found", 404
-
-    # 如果用户提交 Add Exercise 表单
+    owned_plan(plan_id)
+    entry = query_db(
+        "SELECT we.workout_exercise_id, we.sets, we.reps, e.exercise_name "
+        "FROM WorkoutExercise we JOIN WorkDay d ON we.day_id = d.day_id "
+        "JOIN Exercise e ON we.exercise_id = e.exercise_id "
+        "WHERE we.workout_exercise_id = ? AND d.plan_id = ?", (entry_id, plan_id), one=True)
+    if entry is None:
+        abort(404)
+    cancel_url = url_for("add_plan_exercises", plan_id=plan_id)
+    deleting = request.endpoint == "delete_plan_exercise"
+    error = None
     if request.method == "POST":
-
-        day_id = request.form.get("day_id")
-        exercise_id = request.form.get("exercise_id")
-        sets = request.form.get("sets")
-        reps = request.form.get("reps")
-
-        # 检查必须的数据
-        if day_id and exercise_id:
-
-            # 确认选择的训练日属于这个 plan
-            day = query_db(
-                """
-                SELECT day_id
-                FROM WorkDay
-                WHERE day_id = ?
-                AND plan_id = ?;
-                """,
-                (day_id, plan_id),
-                one=True,
-            )
-
-            if day is not None:
-
-                db = get_db()
-
-                db.execute(
-                    """
-                    INSERT INTO WorkoutExercise (
-                        day_id,
-                        exercise_id,
-                        sets,
-                        reps
-                    )
-                    VALUES (?, ?, ?, ?);
-                    """,
-                    (
-                        day_id,
-                        exercise_id,
-                        sets,
-                        reps,
-                    ),
-                )
-
-                db.commit()
-
-        # 添加完成后重新加载当前页面
-        return redirect(
-            url_for(
-                "add_plan_exercises",
-                plan_id=plan_id
-            )
-        )
-
-    # 查询这个 Plan 的训练日
-    days = query_db(
-        """
-        SELECT
-            day_id,
-            day_name
-        FROM WorkDay
-        WHERE plan_id = ?
-        ORDER BY day_id;
-        """,
-        (plan_id,),
-    )
-
-    # 查询所有可以添加的动作
-    exercises = query_db(
-        """
-        SELECT
-            exercise_id,
-            exercise_name,
-            equipment
-        FROM Exercise
-        ORDER BY exercise_name;
-        """
-    )
-
-    # 查询当前已经添加到计划中的动作
-    plan_exercises = query_db(
-        """
-        SELECT
-            WorkoutExercise.workout_exercise_id,
-            WorkoutExercise.day_id,
-            WorkDay.day_name,
-            Exercise.exercise_name,
-            Exercise.equipment,
-            WorkoutExercise.sets,
-            WorkoutExercise.reps
-
-        FROM WorkoutExercise
-
-        JOIN WorkDay
-            ON WorkoutExercise.day_id =
-               WorkDay.day_id
-
-        JOIN Exercise
-            ON WorkoutExercise.exercise_id =
-               Exercise.exercise_id
-
-        WHERE WorkDay.plan_id = ?
-
-        ORDER BY
-            WorkDay.day_id,
-            WorkoutExercise.workout_exercise_id;
-        """,
-        (plan_id,),
-    )
-
-    return render_template(
-        "add exercises.html",
-        plan=plan,
-        days=days,
-        exercises=exercises,
-        plan_exercises=plan_exercises,
-    )
+        db = get_db()
+        if deleting:
+            if request.form.get("confirm") != "yes":
+                abort(400, description="Please confirm deletion.")
+            with db:
+                db.execute("DELETE FROM WorkoutExercise WHERE workout_exercise_id = ?", (entry_id,))
+        else:
+            sets, reps = positive_count("sets"), positive_count("reps")
+            if sets is None or reps is None:
+                error = "Sets and reps must be whole numbers from 1 to 2147483647."
+            else:
+                with db:
+                    db.execute("UPDATE WorkoutExercise SET sets = ?, reps = ? "
+                               "WHERE workout_exercise_id = ?", (sets, reps, entry_id))
+        if not error:
+            return redirect(cancel_url)
+    if deleting:
+        return render_template("confirm deletion.html", title="Remove planned exercise",
+                               item_name=entry["exercise_name"], cancel_url=cancel_url)
+    return render_template("exercise editor.html", entry=entry, error=error,
+                           cancel_url=cancel_url), (400 if error else 200)
 
 
 if __name__ == "__main__":

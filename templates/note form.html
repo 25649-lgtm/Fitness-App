@@ -1,0 +1,19 @@
+<!-- 共用字段确保新建和编辑保持一致；提交失败时保留用户输入。 -->
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% set saved = note if note is defined else {} %}
+<div class="form-group"><label for="exercise_id">Exercise</label>
+<select id="exercise_id" name="exercise_id" required><option value="">Choose an exercise</option>
+{% for exercise in exercises %}<option value="{{ exercise.exercise_id }}" {% if request.form.get('exercise_id', saved.get('exercise_id', '') if saved is mapping else saved.exercise_id)|string == exercise.exercise_id|string %}selected{% endif %}>{{ exercise.exercise_name }}</option>{% endfor %}
+</select></div>
+{% for field, label, kind in [('date', 'Date', 'date'), ('weight', 'Weight (kg)', 'number'), ('sets', 'Sets', 'number'), ('reps', 'Reps', 'number')] %}
+{% set previous = saved[field] if field in saved.keys() else '' %}
+<div class="form-group"><label for="{{ field }}">{{ label }}</label>
+<input id="{{ field }}" name="{{ field }}" type="{{ kind }}" value="{{ request.form.get(field, previous if previous is not none else '') }}"
+{% if field == 'weight' %}min="0" step="any"{% elif field in ['sets', 'reps'] %}min="1" max="2147483647" step="1" required{% else %}required{% endif %}></div>
+{% endfor %}
+<div class="form-group"><label for="notes">Notes</label>
+<textarea id="notes" name="notes" maxlength="2000" rows="3">{{ request.form.get('notes', saved['notes'] if 'notes' in saved.keys() and saved['notes'] else '') }}</textarea></div>
+<button type="submit" class="plan-submit">Save Workout</button>
+{% if note is defined %}<a class="secondary-button" href="{{ url_for('notes') }}">Cancel</a>{% endif %}
+</form>

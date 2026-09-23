@@ -141,6 +141,12 @@ body {
 }
 
 .primary-button {
+    /* 统一链接与表单按钮，去掉浏览器默认边框和字体差异。 */
+    appearance: none;
+    border: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: normal;
     background-color: #3c003c;
     color: rgb(0, 0, 0);
 }
@@ -948,4 +954,39 @@ body {
         align-items: flex-start;
         gap: 12px;
     }
+}
+
+/* 编辑和删除操作保持间距，窄屏自动换行。 */
+.plan-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.plan-exercise-item { flex-wrap: wrap; gap: 12px; }
+
+/* 统一操作按钮效果，但保留 Quick Menu 和 Recent Activity 原来的样式。 */
+.primary-button,
+.secondary-button:not(.recent-activity *),
+.menu-button:not(.quick-menu *),
+.plan-submit,
+.finish-plan-button,
+.register-btn,
+.login-submit {
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+.primary-button:hover, .primary-button:focus-visible,
+.secondary-button:not(.recent-activity *):hover, .secondary-button:not(.recent-activity *):focus-visible,
+.menu-button:not(.quick-menu *):hover, .menu-button:not(.quick-menu *):focus-visible,
+.plan-submit:hover, .plan-submit:focus-visible,
+.finish-plan-button:hover, .finish-plan-button:focus-visible,
+.register-btn:hover, .register-btn:focus-visible,
+.login-submit:hover, .login-submit:focus-visible {
+    background: #b99e9e;
+    color: #000000;
+    border-color: #b99e9e;
+}
+
+/* 导航及账户菜单沿用相同悬停与键盘聚焦颜色。 */
+.nav-links a:hover, .nav-links a:focus-visible,
+.profile-dropdown a:hover, .profile-dropdown a:focus-visible,
+.profile-dropdown button:hover, .profile-dropdown button:focus-visible {
+    background: #b99e9e;
+    color: #000000;
 }

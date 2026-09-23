@@ -1,0 +1,10 @@
+{% extends 'plan base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}<h1>{{ title }}</h1><p>Delete “{{ item_name }}”?</p>
+<p>This cannot be undone. Deleting a plan also removes its training days and planned exercises. Recorded workout history is kept.</p>
+<!-- GET 仅展示确认页，只有带令牌和确认值的 POST 才会删除数据。 -->
+<form method="POST" data-plan-navigation><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<!-- 点击确认删除按钮即提交确认值，无需额外勾选。 -->
+<div class="plan-actions"><button class="primary-button" type="submit" name="confirm" value="yes">Confirm Delete</button>
+<a class="secondary-button" href="{{ cancel_url }}">Cancel</a></div>
+</form>{% endblock %}
