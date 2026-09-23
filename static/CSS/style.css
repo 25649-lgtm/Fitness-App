@@ -962,10 +962,10 @@ body {
 .plan-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
 .plan-exercise-item { flex-wrap: wrap; gap: 12px; }
 
-/* 统一操作按钮效果，但保留 Quick Menu 和 Recent Activity 原来的样式。 */
+/* 菜单卡片（含 Create Workout Plan）保留 Quick Menu 效果，其他操作按钮统一。 */
 .primary-button,
 .secondary-button:not(.recent-activity *),
-.menu-button:not(.quick-menu *),
+.add-record-button,
 .plan-submit,
 .finish-plan-button,
 .register-btn,
@@ -975,7 +975,7 @@ body {
 }
 .primary-button:hover, .primary-button:focus-visible,
 .secondary-button:not(.recent-activity *):hover, .secondary-button:not(.recent-activity *):focus-visible,
-.menu-button:not(.quick-menu *):hover, .menu-button:not(.quick-menu *):focus-visible,
+.add-record-button:hover, .add-record-button:focus-visible,
 .plan-submit:hover, .plan-submit:focus-visible,
 .finish-plan-button:hover, .finish-plan-button:focus-visible,
 .register-btn:hover, .register-btn:focus-visible,

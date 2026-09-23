@@ -20,5 +20,6 @@
 <label><input type="checkbox" name="confirm_remove_days" value="yes"> I confirm removal of deselected days and their exercises.</label>
 {% endif %}
 <div class="plan-actions"><button class="primary-button" type="submit">Save Plan</button>
-<a class="secondary-button" href="{{ url_for('plans') }}">Cancel</a></div>
+<!-- 取消新建时返回主页，取消编辑时返回计划列表。 -->
+<a class="secondary-button" href="{{ url_for('plans') if plan else url_for('homepage') }}">Cancel</a></div>
 </form>{% endblock %}

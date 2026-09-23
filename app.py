@@ -56,6 +56,8 @@ def load_secret_key():
 
 app.config.update(
     SECRET_KEY=load_secret_key(),
+    # 关闭调试模式后仍检查模板更新，避免保存 HTML 后页面继续使用旧链接。
+    TEMPLATES_AUTO_RELOAD=True,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
