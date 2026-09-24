@@ -1012,6 +1012,15 @@ body {
 .today-workout {
     contain: size;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+/* 标题独立于滚动区，内容变长时不会把标题和日期推走。 */
+.today-workout > .card-header { flex-shrink: 0; }
+.today-workout-content {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-gutter: stable;
@@ -1019,14 +1028,14 @@ body {
     scrollbar-width: thin;
     scrollbar-color: #61445b transparent;
 }
-.today-workout::-webkit-scrollbar { width: 6px; }
-.today-workout::-webkit-scrollbar-track { background: transparent; }
-.today-workout::-webkit-scrollbar-thumb {
+.today-workout-content::-webkit-scrollbar { width: 6px; }
+.today-workout-content::-webkit-scrollbar-track { background: transparent; }
+.today-workout-content::-webkit-scrollbar-thumb {
     background: #61445b;
     border-radius: 8px;
 }
-.today-workout:hover { scrollbar-color: #8a697f transparent; }
-.today-workout::-webkit-scrollbar-thumb:hover { background: #8a697f; }
+.today-workout-content:hover { scrollbar-color: #8a697f transparent; }
+.today-workout-content::-webkit-scrollbar-thumb:hover { background: #8a697f; }
 .dashboard-column > .dashboard-card { min-width: 0; }
 .weekly-progress .card-header { flex-wrap: wrap; gap: 12px; }
 @media (max-width: 850px) {

@@ -82,14 +82,15 @@
         <!-- 左列保持今日训练与快捷菜单的原有宽度比例。 -->
         <div class="dashboard-column">
         <!-- Today's Workout -->
-        <!-- 可聚焦滚动区域，支持鼠标滚轮及键盘上下滚动。 -->
-        <div class="dashboard-card today-workout" tabindex="0" role="region" aria-label="Today's Workout">
+        <!-- 标题留在卡片顶部，只有下方训练内容参与滚动。 -->
+        <div class="dashboard-card today-workout">
 
             <div class="card-header">
                 <h2>Today's Workout</h2>
                 <span class="card-label">{{ today.isoformat() }}</span>
             </div>
 
+            <div class="today-workout-content" tabindex="0" role="region" aria-label="Today's workout exercises">
             {% if workouts %}
 
                 {% for workout in workouts %}
@@ -139,6 +140,7 @@
                 </div>
 
             {% endif %}
+            </div>
 
         </div>
 
