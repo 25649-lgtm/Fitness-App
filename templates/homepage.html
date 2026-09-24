@@ -29,6 +29,7 @@
 
 
 <main class="container">
+{% include 'messages.html' %}
 
     <section class="welcome-section">
 
@@ -64,9 +65,9 @@
 </h1>
 
             <p>
-                Goal: {{ user["goal"] }}
+                Goal: {{ user["goal"] or "Not set" }}
                 |
-                Current weight: {{ user["weight"] }} kg
+                Current weight: {{ (user["weight"]|string ~ " kg") if user["weight"] is not none else "Not set" }}
             </p>
         {% else %}
             <h1>Welcome to GymTracker</h1>
@@ -171,7 +172,7 @@
 
                 <div class="progress-item">
                     <span class="progress-number">
-                        {{ user["weight"] if user else 0 }}
+                        {{ user["weight"] if user and user["weight"] is not none else "Not set" }}
                     </span>
 
                     <span class="progress-title">
@@ -271,7 +272,7 @@
                                 </h3>
 
                                 <p>
-                                    {{ note["weight"] }} kg
+                                    {{ (note["weight"]|string ~ " kg") if note["weight"] is not none else "Weight not recorded" }}
                                     ·
                                     {{ note["sets"] }} sets
                                     ·

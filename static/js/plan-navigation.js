@@ -19,10 +19,12 @@ document.addEventListener("submit", async (event) => {
             method: "POST",
             body: data,
             credentials: "same-origin",
+            headers: { "X-Plan-Navigation": "1" },
         });
-        if (response.redirected) {
+        const destination = response.headers.get("X-Redirect-To");
+        if (destination || response.redirected) {
             // 替换提交前的表单页面，浏览器后退仍返回之前访问的页面。
-            location.replace(response.url);
+            location.replace(destination || response.url);
             return;
         }
         // 校验失败时显示服务端返回的输入和提示，不增加历史项，也不重复提交。

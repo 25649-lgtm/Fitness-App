@@ -1,7 +1,8 @@
 {% extends 'plan base.html' %}
-{% block title %}Start Workout{% endblock %}
+{% block title %}{{ 'Start Workout' if training is defined else 'Edit Workout Record' }}{% endblock %}
 {% block content %}
-<!-- 展示所选动作的真实计划资料，并预填结果表单。 -->
+<!-- 同一结果表单支持开始训练和编辑记录，只有训练模式显示计划详情。 -->
+{% if training is defined %}
 <h1>{{ training.exercise_name }}</h1>
 <p>{{ training.plan_name }} · {{ training.day_name }}</p>
 <p>{{ training.exercise_description or '' }}</p>
@@ -9,7 +10,10 @@
 <p>Planned: {{ training.sets }} sets × {{ training.reps }} reps</p>
 <h2>Record your results</h2>
 <p>Adjust the fields to match what you completed, then save your workout.</p>
+{% else %}
+<h1>Edit Workout Record</h1>
+{% endif %}
 {% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
 {% include 'note form.html' %}
-<a class="secondary-button" href="{{ url_for('homepage') }}">Back to Home</a>
+{% if training is defined %}<a class="secondary-button" href="{{ url_for('homepage') }}">Back to Home</a>{% endif %}
 {% endblock %}

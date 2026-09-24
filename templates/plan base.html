@@ -5,7 +5,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='CSS/style.css') }}"></head>
 <body><nav class="navbar"><div class="logo">GymTracker</div><div class="nav-links">
 <a href="{{ url_for('homepage') }}">Home</a><a href="{{ url_for('plans') }}">Workout Plans</a>
-</div></nav><main class="container"><section class="dashboard-card">
+</div></nav><main class="container">
+{% include 'messages.html' %}<section class="dashboard-card">
 {% block content %}{% endblock %}</section></main><!-- 为计划操作提供历史替换；不拦截浏览器后退按钮。 -->
 <script src="{{ url_for('static', filename='js/plan-navigation.js') }}" defer></script>
 </body></html>

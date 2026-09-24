@@ -1,0 +1,6 @@
+<!-- 操作反馈由服务器在成功提交后设置，只显示一次。 -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}<div class="feedback-messages" aria-live="polite">
+{% for category, message in messages %}<p class="feedback-message" role="status">{{ message }}</p>{% endfor %}
+</div>{% endif %}
+{% endwith %}

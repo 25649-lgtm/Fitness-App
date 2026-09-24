@@ -1,8 +1,0 @@
-{% extends 'plan base.html' %}
-{% block title %}Edit Workout Record{% endblock %}
-{% block content %}
-<!-- 修改前显示已有数据，错误信息帮助用户修正输入。 -->
-<h1>Edit Workout Record</h1>
-{% if error %}<p class="login-error" role="alert">{{ error }}</p>{% endif %}
-{% include 'note form.html' %}
-{% endblock %}

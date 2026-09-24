@@ -5,11 +5,11 @@ A Flask and SQLite app for managing workout plans, exercises, profiles, and trai
 ## Run
 
 ```powershell
-pip install Flask
+python -m pip install -r requirements.txt
 python app.py
 ```
 
-Open http://127.0.0.1:5000. The database is created automatically on first run.
+Open http://127.0.0.1:5000. Data is stored in `instance/database.db`. On restart, an existing `.venv/database.db` is copied automatically if the new database does not exist; the original is kept as a backup. Stop the old server before restarting.
 
 ## Tests
 

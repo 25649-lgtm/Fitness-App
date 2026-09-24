@@ -3,7 +3,8 @@
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ code }} - {{ title }} | GymTracker</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='CSS/style.css') }}"></head>
-<body><main class="container"><section class="dashboard-card" role="alert">
+<body><main class="container">
+{% include 'messages.html' %}<section class="dashboard-card" role="alert">
 <!-- 错误页面独立渲染，不读取数据库，也不显示内部异常细节。 -->
 <p class="step-label">ERROR {{ code }}</p><h1>{{ title }}</h1><p>{{ message }}</p>
 <a class="primary-button" href="{{ url_for('homepage') if session.get('user_id') else url_for('login') }}">{{ 'Back to Home' if session.get('user_id') else 'Back to Login' }}</a>
