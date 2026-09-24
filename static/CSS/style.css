@@ -999,3 +999,49 @@ body {
 .history-filters .inline-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .history-filters input, .history-filters select { min-width: 0; }
 @media (max-width: 550px) { .history-filters .inline-fields { grid-template-columns: 1fr; } }
+
+/* 左右保持 2:1 比例并等高，让两列最后一张卡片底部对齐。 */
+.dashboard-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: stretch;
+}
+.dashboard-column { display: grid; gap: 24px; min-width: 0; }
+/* 左列多余高度分配给今日计划，快捷菜单维持内容所需高度。 */
+.dashboard-column:first-child { grid-template-rows: minmax(0, 1fr) auto; }
+/* 今日内容不参与列高度计算，保持与右列对齐的高度，超出部分内部滚动。 */
+.today-workout {
+    contain: size;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    /* 滚动条融入深色卡片，仅在悬停时提高滑块对比度。 */
+    scrollbar-width: thin;
+    scrollbar-color: #61445b transparent;
+}
+.today-workout::-webkit-scrollbar { width: 6px; }
+.today-workout::-webkit-scrollbar-track { background: transparent; }
+.today-workout::-webkit-scrollbar-thumb {
+    background: #61445b;
+    border-radius: 8px;
+}
+.today-workout:hover { scrollbar-color: #8a697f transparent; }
+.today-workout::-webkit-scrollbar-thumb:hover { background: #8a697f; }
+.dashboard-column > .dashboard-card { min-width: 0; }
+.weekly-progress .card-header { flex-wrap: wrap; gap: 12px; }
+@media (max-width: 850px) {
+    .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+    /* 手机单列不需要对齐两列底部，卡片恢复自然高度。 */
+    .dashboard-column:first-child { grid-template-rows: auto auto; }
+    /* 手机没有右列高度可参照，内容最多占七成视口后开始滚动。 */
+    .today-workout { contain: none; max-height: 70vh; }
+}
+.week-plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 14px; }
+.week-plan-day { padding: 14px; border: 1px solid #61445b; border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
+.week-plan-day.is-today { border-color: #b99e9e; }
+.week-plan-day h3 { margin-top: 0; }
+.week-plan-entry { border-top: 1px solid #61445b; padding-top: 10px; }
+.weekly-plan .card-header { flex-wrap: wrap; gap: 12px; }
+/* 移除按钮通用的顶部间距，让管理入口文字与周计划标题共用基线。 */
+.weekly-plan .card-header { align-items: baseline; }
+.weekly-plan .card-header .secondary-button { margin-top: 0; }

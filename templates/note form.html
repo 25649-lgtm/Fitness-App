@@ -15,5 +15,6 @@
 <div class="form-group"><label for="notes">Notes</label>
 <textarea id="notes" name="notes" maxlength="2000" rows="3">{{ request.form.get('notes', saved['notes'] if 'notes' in saved.keys() and saved['notes'] else '') }}</textarea></div>
 <button type="submit" class="plan-submit">Save Workout</button>
-{% if note is defined %}<a class="secondary-button" href="{{ url_for('notes') }}">Cancel</a>{% endif %}
+<!-- 仅编辑历史记录时显示取消；开始训练保留页面上的返回主页入口。 -->
+{% if note is defined and training is not defined %}<a class="secondary-button" href="{{ url_for('notes') }}">Cancel</a>{% endif %}
 </form>

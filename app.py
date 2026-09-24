@@ -450,6 +450,36 @@ def homepage():
         workout_sql, (user_id, weekday, today.strftime("%Y%m%d"))
     )
 
+    # 一次查询本周可能生效的安排，空训练日也保留，避免误当成休息日。
+    planned = query_db(
+        "SELECT p.plan_id, p.plan_name, p.date, d.day_name, "
+        "e.exercise_name, we.sets, we.reps "
+        "FROM WorkPlan p JOIN WorkDay d ON d.plan_id = p.plan_id "
+        "LEFT JOIN WorkoutExercise we ON we.day_id = d.day_id "
+        "LEFT JOIN Exercise e ON e.exercise_id = we.exercise_id "
+        "WHERE p.user_id = ? AND REPLACE(p.date, '-', '') < ? "
+        "ORDER BY p.plan_id, d.day_id, we.workout_exercise_id",
+        (user_id, week_end.strftime("%Y%m%d")),
+    )
+    weekly_plan = []
+    for offset, day_name in enumerate(TRAINING_DAYS):
+        day_date = week_start + timedelta(days=offset)
+        # 计划开始日前的星期安排不显示，兼容旧版无连字符的日期。
+        entries = [
+            row
+            for row in planned
+            if row["day_name"] == day_name
+            and str(row["date"]).replace("-", "")
+            <= day_date.strftime("%Y%m%d")
+        ]
+        weekly_plan.append(
+            {
+                "name": day_name,
+                "date": day_date,
+                "entries": entries,
+            }
+        )
+
     notes_sql = """
         SELECT
             Exercise.exercise_name,
@@ -486,6 +516,7 @@ def homepage():
         "homepage.html",
         user=user,
         workouts=workouts,
+        weekly_plan=weekly_plan,
         recent_notes=recent_notes,
         stats=stats,
         today=today,
@@ -681,7 +712,10 @@ def edit_note(note_id):
     )
     return render_template(
         # 训练与编辑记录共用结果页面，未传 training 时显示编辑模式。
-        "training.html", note=note, exercises=exercises, error=error
+        "training.html",
+        note=note,
+        exercises=exercises,
+        error=error,
     ), (400 if error else 200)
 
 

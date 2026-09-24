@@ -1284,6 +1284,36 @@ class AuthenticationTests(unittest.TestCase):
             with patch.dict(os.environ, {"GYMTRACKER_DATABASE": custom}):
                 self.assertEqual(gym.database_path(), custom)
 
+    def test_week_plan_dates_empty_days_and_start_date(self):
+        """周计划按周一到周日排序，开始日前不显示，空训练日与休息日区分。"""
+        self.make_plan()
+        response, context = self.dashboard_context(
+            gym.calendar_date(2026, 9, 23)
+        )
+        days = context["weekly_plan"]
+        self.assertEqual(
+            [day["name"] for day in days], list(gym.TRAINING_DAYS)
+        )
+        self.assertEqual(days[0]["date"], gym.calendar_date(2026, 9, 21))
+        self.assertEqual(days[-1]["date"], gym.calendar_date(2026, 9, 27))
+        self.assertEqual(days[0]["entries"], [])
+        self.assertEqual(days[2]["entries"], [])
+        self.assertEqual(days[4]["entries"][0]["plan_name"], "Original")
+        self.assertIsNone(days[4]["entries"][0]["exercise_name"])
+        self.assertIn(b"This Week's Plan", response.data)
+        self.assertNotIn(b"Current Weight (kg)", response.data)
+        _, context = self.dashboard_context(gym.calendar_date(2026, 9, 28))
+        self.assertEqual(context["weekly_plan"][0]["entries"][0]["sets"], 3)
+        self.assertEqual(context["weekly_plan"][0]["entries"][0]["reps"], 8)
+        # 切换账户后，本周视图不能继续展示前一个账户的计划。
+        self.post_form("/logout")
+        self.register("week-plan@example.com")
+        self.login(email="week-plan@example.com")
+        _, context = self.dashboard_context(gym.calendar_date(2026, 9, 28))
+        self.assertTrue(
+            all(not day["entries"] for day in context["weekly_plan"])
+        )
+
     def test_old_schema_migrates_once_and_preserves_login(self):
         """模拟旧数据库，验证密码迁移后可登录且重复初始化不会再次哈希。"""
         original = gym.DATABASE

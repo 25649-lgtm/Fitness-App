@@ -79,8 +79,11 @@
 
     <section class="dashboard-grid">
 
+        <!-- 左列保持今日训练与快捷菜单的原有宽度比例。 -->
+        <div class="dashboard-column">
         <!-- Today's Workout -->
-        <div class="dashboard-card today-workout">
+        <!-- 可聚焦滚动区域，支持鼠标滚轮及键盘上下滚动。 -->
+        <div class="dashboard-card today-workout" tabindex="0" role="region" aria-label="Today's Workout">
 
             <div class="card-header">
                 <h2>Today's Workout</h2>
@@ -140,57 +143,6 @@
         </div>
 
 
-        <!-- Weekly Progress -->
-        <div class="dashboard-card weekly-progress">
-
-            <div class="card-header">
-                <h2>Weekly Progress</h2>
-                <span class="card-label">{{ week_start.isoformat() }} – {{ week_last.isoformat() }}</span>
-            </div>
-
-            <div class="progress-statistics">
-
-                <div class="progress-item">
-                    <span class="progress-number">
-                        {{ stats["workout_count"] if stats else 0 }}
-                    </span>
-
-                    <span class="progress-title">
-                        Exercise Records
-                    </span>
-                </div>
-
-                <div class="progress-item">
-                    <span class="progress-number">
-                        {{ stats["exercise_count"] if stats else 0 }}
-                    </span>
-
-                    <span class="progress-title">
-                        Exercises Tracked
-                    </span>
-                </div>
-
-                <div class="progress-item">
-                    <span class="progress-number">
-                        {{ user["weight"] if user and user["weight"] is not none else "Not set" }}
-                    </span>
-
-                    <span class="progress-title">
-                        Current Weight (kg)
-                    </span>
-                </div>
-
-            </div>
-
-<!-- 未设定每周目标，移除固定进度条，避免展示虚假的完成比例。 -->
-
-            <p class="progress-message">
-                Keep recording your workouts to build a consistent routine.
-            </p>
-
-        </div>
-
-
         <!-- Quick Menu -->
         <div class="dashboard-card quick-menu">
 
@@ -241,6 +193,76 @@
 
         </div>
 
+
+        </div>
+        <!-- 右列集中显示本周进度、周计划和最近活动。 -->
+        <div class="dashboard-column">
+        <!-- Weekly Progress -->
+        <div class="dashboard-card weekly-progress">
+
+            <div class="card-header">
+                <h2>Weekly Progress</h2>
+                <span class="card-label">{{ week_start.isoformat() }} – {{ week_last.isoformat() }}</span>
+            </div>
+
+            <div class="progress-statistics">
+
+                <div class="progress-item">
+                    <span class="progress-number">
+                        {{ stats["workout_count"] if stats else 0 }}
+                    </span>
+
+                    <span class="progress-title">
+                        Exercise Records
+                    </span>
+                </div>
+
+                <div class="progress-item">
+                    <span class="progress-number">
+                        {{ stats["exercise_count"] if stats else 0 }}
+                    </span>
+
+                    <span class="progress-title">
+                        Exercises Tracked
+                    </span>
+                </div>
+
+
+
+            </div>
+
+<!-- 未设定每周目标，移除固定进度条，避免展示虚假的完成比例。 -->
+
+            <p class="progress-message">
+                Keep recording your workouts to build a consistent routine.
+            </p>
+
+        </div>
+
+
+        <!-- 周计划展示安排，与 Weekly Progress 的实际完成记录分开。 -->
+        <section class="dashboard-card weekly-plan">
+            <div class="card-header"><h2>This Week's Plan</h2>
+                <a class="secondary-button" href="{{ url_for('plans') }}">Manage Plans</a>
+            </div>
+            <p>{{ week_start.isoformat() }} – {{ week_last.isoformat() }}</p>
+            <div class="week-plan-grid">
+                {% for day in weekly_plan %}
+                <section class="week-plan-day{% if day.date == today %} is-today{% endif %}">
+                    <h3>{{ day.name }}{% if day.date == today %} · Today{% endif %}</h3>
+                    <p>{{ day.date.isoformat() }}</p>
+                    {% for entry in day.entries %}
+                    <div class="week-plan-entry">
+                        <strong>{{ entry.plan_name }}</strong>
+                        {% if entry.exercise_name %}
+                        <p>{{ entry.exercise_name }} · {{ entry.sets }} × {{ entry.reps }}</p>
+                        {% else %}<p>No exercises added yet.</p>{% endif %}
+                    </div>
+                    {% else %}<p>No training scheduled.</p>{% endfor %}
+                </section>
+                {% endfor %}
+            </div>
+        </section>
 
         <!-- Recent Activity -->
         <div class="dashboard-card recent-activity">
@@ -312,6 +334,7 @@
 
         </div>
 
+        </div>
     </section>
 
 </main>
