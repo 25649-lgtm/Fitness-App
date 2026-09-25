@@ -888,12 +888,21 @@ class AuthenticationTests(unittest.TestCase):
             ).status_code,
             400,
         )
+        # 无效提交不能完成动作；保存后状态持久化且只适用于记录当天。
+        _, before = self.dashboard_context(gym.calendar_date(2026, 9, 28))
+        self.assertFalse(before["workouts"][0]["completed"])
         response = self.post_form(route, data)
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.location.endswith("/notes"))
+        # 训练保存后直接返回主页展示完成状态。
+        self.assertTrue(response.location.endswith("/homepage"))
         self.assertIn(b"Completed today", self.client.get("/notes").data)
         _, context = self.dashboard_context(gym.calendar_date(2026, 9, 28))
         self.assertEqual(context["stats"]["workout_count"], 1)
+        self.assertTrue(context["workouts"][0]["completed"])
+        refreshed, _ = self.dashboard_context(gym.calendar_date(2026, 9, 28))
+        self.assertIn(b"Completed</span>", refreshed.data)
+        _, next_week = self.dashboard_context(gym.calendar_date(2026, 10, 5))
+        self.assertFalse(next_week["workouts"][0]["completed"])
         self.post_form("/logout")
         self.register("intruder@example.com")
         self.login(email="intruder@example.com")

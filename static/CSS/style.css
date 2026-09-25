@@ -1070,3 +1070,5 @@ body {
 .weekly-plan > .card-header, .weekly-plan > p,
 .recent-activity > .card-header { flex-shrink: 0; }
 .dashboard-scroll-content { overflow-wrap: anywhere; }
+/* 成功记录的今日动作显示完成标记，避免与开始训练按钮混淆。 */
+.workout-completed { color: #a9dfb6; font-weight: 700; margin-top: 16px; }

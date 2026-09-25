@@ -102,7 +102,12 @@
 
                             <span>Sets × Reps</span>
                             <!-- 每条动作使用真实 ID，避免跳到固定或他人的训练记录。 -->
+                            {# 仅对应计划动作在今天成功保存记录后显示完成状态。 #}
+                            {% if workout['completed'] %}
+                            <span class="workout-completed">✓ Completed</span>
+                            {% else %}
                             <a href="{{ url_for('training', id=workout['workout_exercise_id']) }}" class="primary-button">Start Workout</a>
+                            {% endif %}
                         </div>
 
                     </div>

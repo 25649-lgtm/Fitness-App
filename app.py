@@ -257,6 +257,16 @@ def init_db():
                 FOREIGN KEY (exercise_id) REFERENCES Exercise(exercise_id)
             )
             """)
+        # 记录来源计划动作；旧记录保留为空，删除计划时保留训练历史。
+        note_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(WorkNotes)")
+        }
+        if "workout_exercise_id" not in note_columns:
+            conn.execute(
+                "ALTER TABLE WorkNotes ADD COLUMN workout_exercise_id "
+                "INTEGER REFERENCES WorkoutExercise(workout_exercise_id) "
+                "ON DELETE SET NULL"
+            )
         # 动作表为空时加入一些基础动作
         if conn.execute("SELECT COUNT(*) FROM Exercise").fetchone()[0] == 0:
             conn.executemany(
@@ -433,7 +443,14 @@ def homepage():
             Exercise.exercise_name,
             Exercise.equipment,
             WorkoutExercise.sets,
-            WorkoutExercise.reps
+            WorkoutExercise.reps,
+            EXISTS (
+                SELECT 1 FROM WorkNotes n
+                WHERE n.workout_exercise_id =
+                    WorkoutExercise.workout_exercise_id
+                AND n.user_id = WorkPlan.user_id
+                AND REPLACE(n.date, '-', '') = ?
+            ) AS completed
         FROM WorkoutExercise
         JOIN WorkDay
             ON WorkoutExercise.day_id = WorkDay.day_id
@@ -447,7 +464,9 @@ def homepage():
                  WorkoutExercise.workout_exercise_id;
     """
     workouts = query_db(
-        workout_sql, (user_id, weekday, today.strftime("%Y%m%d"))
+        workout_sql,
+        (today.strftime("%Y%m%d"), user_id, weekday,
+         today.strftime("%Y%m%d")),
     )
 
     # 一次查询本周可能生效的安排，空训练日也保留，避免误当成休息日。
@@ -582,14 +601,14 @@ def training(id):
             with db:
                 db.execute(
                     "INSERT INTO WorkNotes (exercise_id, da"
-                    "te, weight, sets, reps, notes, user_id"
+                    "te, weight, sets, reps, notes, user_id, workout_exercise_id"
                     ") "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (*values, session["user_id"]),
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (*values, session["user_id"], id),
                 )
-            # 保存成功后提供明确反馈。
+            # 从计划开始的训练保存后返回主页，直接查看对应动作的完成状态。
             flash("Workout recorded.", "success")
-            return redirect(url_for("notes"))
+            return redirect(url_for("homepage"))
     defaults = {
         "exercise_id": result["exercise_id"],
         "date": today_date().isoformat(),

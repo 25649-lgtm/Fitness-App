@@ -1,6 +1,7 @@
 <!-- 操作反馈由服务器在成功提交后设置，只显示一次。 -->
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}<div class="feedback-messages" aria-live="polite">
-{% for category, message in messages %}<p class="feedback-message" role="status">{{ message }}</p>{% endfor %}
+{# 训练保存成功的提示添加自动关闭标记，其他反馈保持原有显示方式。 #}
+{% for category, message in messages %}<p class="feedback-message" role="status"{% if category == 'success' and message == 'Workout recorded.' %} data-workout-recorded{% endif %}>{{ message }}</p>{% endfor %}
 </div>{% endif %}
 {% endwith %}

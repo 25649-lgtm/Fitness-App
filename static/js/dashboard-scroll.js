@@ -1,3 +1,14 @@
+// 首页的训练保存提示显示五秒后移除，同时清理空容器以免留下空白。
+document.querySelectorAll('[data-workout-recorded]').forEach((message) => {
+    window.setTimeout(() => {
+        const container = message.parentElement;
+        message.remove();
+        if (container && !container.querySelector('.feedback-message')) {
+            container.remove();
+        }
+    }, 5000);
+});
+
 // 根据前两项的实际高度设置可见区域，文字换行后仍能完整显示两项。
 document.querySelectorAll('.weekly-plan, .recent-activity').forEach((card) => {
     const viewport = card.querySelector('.dashboard-scroll-content');
