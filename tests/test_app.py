@@ -62,8 +62,12 @@ class AuthenticationTests(unittest.TestCase):
                 400,
             )
         data = {"exercise_name": "My cable movement", "equipment": "Cable"}
-        self.assertEqual(self.post_form("/exercises/new", data).status_code, 302)
-        self.assertEqual(self.post_form("/exercises/new", data).status_code, 400)
+        self.assertEqual(
+            self.post_form("/exercises/new", data).status_code, 302
+        )
+        self.assertEqual(
+            self.post_form("/exercises/new", data).status_code, 400
+        )
         with closing(sqlite3.connect(gym.DATABASE)) as db:
             custom_id = db.execute(
                 "SELECT exercise_id FROM Exercise WHERE exercise_name = ?",
@@ -156,12 +160,8 @@ class AuthenticationTests(unittest.TestCase):
         )
         self.assertEqual(self.register("TEST@EXAMPLE.COM").status_code, 302)
         with closing(sqlite3.connect(gym.DATABASE)) as db:
-            emails = {
-                row[0] for row in db.execute("SELECT email FROM User")
-            }
-        self.assertEqual(
-            emails, {"test@example.com", "TEST@EXAMPLE.COM"}
-        )
+            emails = {row[0] for row in db.execute("SELECT email FROM User")}
+        self.assertEqual(emails, {"test@example.com", "TEST@EXAMPLE.COM"})
 
     def test_wrong_empty_and_missing_credentials_are_rejected(self):
         """确认错误、空白或缺失的登录资料不会建立登录会话。"""
@@ -188,8 +188,14 @@ class AuthenticationTests(unittest.TestCase):
         response = self.post_form("/signup", short)
         self.assertIn(b"at least 8 characters", response.data)
         with closing(sqlite3.connect(gym.DATABASE)) as db:
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM User").fetchone()[0], 0)
-        accepted = {**short, "password": "12345678", "confirm_password": "12345678"}
+            self.assertEqual(
+                db.execute("SELECT COUNT(*) FROM User").fetchone()[0], 0
+            )
+        accepted = {
+            **short,
+            "password": "12345678",
+            "confirm_password": "12345678",
+        }
         self.assertEqual(self.post_form("/signup", accepted).status_code, 302)
 
     def test_csrf_rejects_invalid_tokens_on_all_write_routes(self):
@@ -375,8 +381,8 @@ class AuthenticationTests(unittest.TestCase):
             ).fetchone()[0]
         return plan_id, day_id, exercise_id, entry_id
 
-    def test_plan_edit_preserves_days_and_confirms_removal(self):
-        """保留日期的动作不能丢失；移除日期必须确认，历史记录不受影响。"""
+    def test_plan_edit_preserves_days_and_removes_deselected_days(self):
+        """保留日期的动作不能丢失；取消日期后直接保存，历史记录不受影响。"""
         plan_id, day_id, _, entry_id = self.make_plan()
         route = f"/workout-plan/{plan_id}/edit"
         self.assertEqual(self.client.get(route).status_code, 200)
@@ -385,7 +391,6 @@ class AuthenticationTests(unittest.TestCase):
             "description": "After",
             "date": "2026-10-01",
             "training_days": ["Monday", "Wednesday"],
-            "confirm_remove_days": "yes",
         }
         self.assertEqual(self.post_form(route, values).status_code, 302)
         with closing(sqlite3.connect(gym.DATABASE)) as db, db:
@@ -405,16 +410,8 @@ class AuthenticationTests(unittest.TestCase):
                 ).fetchone()[0],
                 day_id,
             )
-        values.update(training_days=["Wednesday"], confirm_remove_days="")
-        self.assertEqual(self.post_form(route, values).status_code, 400)
-        with closing(sqlite3.connect(gym.DATABASE)) as db, db:
-            self.assertEqual(
-                db.execute("SELECT COUNT(*) FROM WorkoutExercise").fetchone()[
-                    0
-                ],
-                1,
-            )
-        values["confirm_remove_days"] = "yes"
+        # 不提交额外确认字段，也能直接删除取消选择的日期。
+        values.update(training_days=["Wednesday"])
         self.assertEqual(self.post_form(route, values).status_code, 302)
         with closing(sqlite3.connect(gym.DATABASE)) as db, db:
             self.assertEqual(

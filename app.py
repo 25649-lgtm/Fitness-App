@@ -611,7 +611,8 @@ def training(id):
             with db:
                 db.execute(
                     "INSERT INTO WorkNotes (exercise_id, da"
-                    "te, weight, sets, reps, notes, user_id, workout_exercise_id"
+                    "te, weight, sets, reps, notes, user_id, "
+                    "workout_exercise_id"
                     ") "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (*values, session["user_id"], id),
@@ -675,7 +676,10 @@ def create_exercise():
         if not name or len(name) > 120:
             error = "Enter an exercise name between 1 and 120 characters."
         elif len(equipment) > 120 or len(description) > 2000:
-            error = "Keep equipment within 120 and description within 2000 characters."
+            error = (
+                "Keep equipment within 120 and description "
+                "within 2000 characters."
+            )
         elif any(
             row["exercise_name"].casefold() == name.casefold()
             for row in available_exercises()
@@ -693,9 +697,9 @@ def create_exercise():
                 )
             flash("Exercise created.", "success")
             return redirect(url_for("exercises"))
-    return render_template(
-        "create exercise.html", error=error
-    ), (400 if error else 200)
+    return render_template("create exercise.html", error=error), (
+        400 if error else 200
+    )
 
 
 def validate_note_form():
@@ -1094,16 +1098,7 @@ def workout_plan(plan_id=None):
             for day in existing_days
             if day["day_name"] not in selected_days
         ]
-        # 移除训练日会删除其计划动作，必须获得用户在表单中的明确确认。
-        if (
-            not error
-            and removed
-            and request.form.get("confirm_remove_days") != "yes"
-        ):
-            error = (
-                "Confirm removal of deselected days "
-                "and their planned exercises."
-            )
+        # 点击保存即应用训练日选择，取消的日期及其计划动作一并移除。
         if not error:
             db = get_db()
             with db:
