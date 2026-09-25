@@ -77,7 +77,7 @@
                 <span class="card-label">{{ today.isoformat() }}</span>
             </div>
 
-            <div class="today-workout-content" tabindex="0" role="region" aria-label="Today's workout exercises">
+            <div class="today-workout-content dashboard-scroll-content" tabindex="0" role="region" aria-label="Today's workout exercises">
             {% if workouts %}
 
                 {% for workout in workouts %}
@@ -222,9 +222,6 @@
 
 <!-- 未设定每周目标，移除固定进度条，避免展示虚假的完成比例。 -->
 
-            <p class="progress-message">
-                Keep recording your workouts to build a consistent routine.
-            </p>
 
         </div>
 
@@ -235,6 +232,8 @@
                 <a class="secondary-button" href="{{ url_for('plans') }}">Manage Plans</a>
             </div>
             <p>{{ week_start.isoformat() }} – {{ week_last.isoformat() }}</p>
+            {# 周计划仅滚动内容，标题、日期和管理按钮保持可见。 #}
+            <div class="dashboard-scroll-content" tabindex="0" role="region" aria-label="This week's plan">
             <div class="week-plan-grid">
                 {% for day in weekly_plan %}
                 <section class="week-plan-day{% if day.date == today %} is-today{% endif %}">
@@ -251,6 +250,7 @@
                 </section>
                 {% endfor %}
             </div>
+            </div>
         </section>
 
         <!-- Recent Activity -->
@@ -264,6 +264,8 @@
                 </a>
             </div>
 
+            {# 最近活动与今日计划共用滚动条样式，标题不随内容滚动。 #}
+            <div class="dashboard-scroll-content" tabindex="0" role="region" aria-label="Recent activity">
             {% if recent_notes %}
 
                 <div class="activity-list">
@@ -320,6 +322,7 @@
                 </div>
 
             {% endif %}
+            </div>
 
         </div>
 
@@ -328,5 +331,7 @@
 
 </main>
 
+{# 依据前两天和前两条记录的实际高度限制滚动区域。 #}
+<script src="{{ url_for('static', filename='js/dashboard-scroll.js') }}" defer></script>
 </body>
 </html>

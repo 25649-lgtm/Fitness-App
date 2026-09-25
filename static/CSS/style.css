@@ -1018,7 +1018,7 @@ body {
 }
 /* 标题独立于滚动区，内容变长时不会把标题和日期推走。 */
 .today-workout > .card-header { flex-shrink: 0; }
-.today-workout-content {
+.dashboard-scroll-content {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -1028,14 +1028,14 @@ body {
     scrollbar-width: thin;
     scrollbar-color: #61445b transparent;
 }
-.today-workout-content::-webkit-scrollbar { width: 6px; }
-.today-workout-content::-webkit-scrollbar-track { background: transparent; }
-.today-workout-content::-webkit-scrollbar-thumb {
+.dashboard-scroll-content::-webkit-scrollbar { width: 6px; }
+.dashboard-scroll-content::-webkit-scrollbar-track { background: transparent; }
+.dashboard-scroll-content::-webkit-scrollbar-thumb {
     background: #61445b;
     border-radius: 8px;
 }
-.today-workout-content:hover { scrollbar-color: #8a697f transparent; }
-.today-workout-content::-webkit-scrollbar-thumb:hover { background: #8a697f; }
+.dashboard-scroll-content:hover { scrollbar-color: #8a697f transparent; }
+.dashboard-scroll-content::-webkit-scrollbar-thumb:hover { background: #8a697f; }
 .dashboard-column > .dashboard-card { min-width: 0; }
 .weekly-progress .card-header { flex-wrap: wrap; gap: 12px; }
 @media (max-width: 850px) {
@@ -1054,3 +1054,19 @@ body {
 /* 移除按钮通用的顶部间距，让管理入口文字与周计划标题共用基线。 */
 .weekly-plan .card-header { align-items: baseline; }
 .weekly-plan .card-header .secondary-button { margin-top: 0; }
+
+/* 右列卡片限定高度，把更多内容空间分配给周计划，溢出时内部滚动。 */
+.weekly-plan, .recent-activity {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+/* 每天独占一行，滚动区高度由前两项实际内容决定。 */
+.weekly-plan .week-plan-grid { grid-template-columns: minmax(0, 1fr); }
+.weekly-plan .dashboard-scroll-content,
+.recent-activity .dashboard-scroll-content { flex: none; }
+/* 标题及周计划日期保留在滚动区域外。 */
+.weekly-plan > .card-header, .weekly-plan > p,
+.recent-activity > .card-header { flex-shrink: 0; }
+.dashboard-scroll-content { overflow-wrap: anywhere; }
