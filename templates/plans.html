@@ -19,21 +19,7 @@
 
 <body>
 
-    <nav class="navbar">
-
-        <div class="logo">
-            GymTracker
-        </div>
-
-        <div class="nav-links">
-            <a href="{{ url_for('homepage') }}">Home</a>
-            <a href="{{ url_for('plans') }}">Plans</a>
-            <a href="{{ url_for('exercises') }}">Exercises</a>
-            <a href="{{ url_for('notes') }}">Notes</a>
-            <a href="{{ url_for('profile') }}">Profile</a>
-        </div>
-
-    </nav>
+    {% include 'navigation.html' %}
 
     <main class="container">
 {% include 'messages.html' %}

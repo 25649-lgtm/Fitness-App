@@ -1,0 +1,10 @@
+{# 各页面共用固定的四个导航入口，避免名称、数量和顺序不一致。 #}
+<nav class="navbar">
+    <div class="logo">GymTracker</div>
+    <div class="nav-links">
+        <a href="{{ url_for('homepage') }}">Home</a>
+        <a href="{{ url_for('plans') }}">Workout Plans</a>
+        <a href="{{ url_for('exercises') }}">Exercises</a>
+        <a href="{{ url_for('notes') }}">Workout Notes</a>
+    </div>
+</nav>
