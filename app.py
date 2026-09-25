@@ -257,6 +257,15 @@ def init_db():
                 FOREIGN KEY (exercise_id) REFERENCES Exercise(exercise_id)
             )
             """)
+        # 无创建者的旧动作继续作为公共基础动作，新动作关联创建账户。
+        exercise_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(Exercise)")
+        }
+        if "user_id" not in exercise_columns:
+            conn.execute(
+                "ALTER TABLE Exercise ADD COLUMN user_id INTEGER "
+                "REFERENCES User(user_id)"
+            )
         # 记录来源计划动作；旧记录保留为空，删除计划时保留训练历史。
         note_columns = {
             row[1] for row in conn.execute("PRAGMA table_info(WorkNotes)")
@@ -345,6 +354,8 @@ def register():
         # 创建账户前检查表单内容
         if not user_name or not email or not password:
             error = "Please fill in all fields."
+        elif len(password) < 8:
+            error = "Password must contain at least 8 characters."
         elif password != confirm_password:
             error = "Passwords do not match."
         else:
@@ -465,8 +476,7 @@ def homepage():
     """
     workouts = query_db(
         workout_sql,
-        (today.strftime("%Y%m%d"), user_id, weekday,
-         today.strftime("%Y%m%d")),
+        (today.strftime("%Y%m%d"), user_id, weekday, today.strftime("%Y%m%d")),
     )
 
     # 一次查询本周可能生效的安排，空训练日也保留，避免误当成休息日。
@@ -626,22 +636,66 @@ def training(id):
     ), (400 if error else 200)
 
 
+def available_exercises():
+    """统一列出公共动作和当前用户的自定义动作，供所有选择表单使用。"""
+    return query_db(
+        "SELECT exercise_id, exercise_name, description, equipment, user_id "
+        "FROM Exercise WHERE user_id IS NULL OR user_id = ? "
+        "ORDER BY exercise_name",
+        (session.get("user_id"),),
+    )
+
+
+def available_exercise(exercise_id):
+    """服务端验证动作权限，防止伪造表单引用其他账户的私人动作。"""
+    return query_db(
+        "SELECT exercise_id FROM Exercise WHERE exercise_id = ? "
+        "AND (user_id IS NULL OR user_id = ?)",
+        (exercise_id, session.get("user_id")),
+        one=True,
+    )
+
+
 @app.route("/exercises")
 def exercises():
-    # Show all exercises
-    sql = """
-        SELECT
-            exercise_id,
-            exercise_name,
-            description,
-            equipment
-        FROM Exercise
-        ORDER BY exercise_name;
-    """
+    """动作库只展示可用动作与新增入口。"""
+    return render_template("exercises.html", exercises=available_exercises())
 
-    results = query_db(sql)
 
-    return render_template("exercises.html", exercises=results)
+@app.route("/exercises/new", methods=["GET", "POST"])
+def create_exercise():
+    """独立页面创建私人动作，保存成功后返回动作库。"""
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    error = None
+    if request.method == "POST":
+        name = request.form.get("exercise_name", "").strip()
+        equipment = request.form.get("equipment", "").strip()
+        description = request.form.get("description", "").strip()
+        if not name or len(name) > 120:
+            error = "Enter an exercise name between 1 and 120 characters."
+        elif len(equipment) > 120 or len(description) > 2000:
+            error = "Keep equipment within 120 and description within 2000 characters."
+        elif any(
+            row["exercise_name"].casefold() == name.casefold()
+            for row in available_exercises()
+        ):
+            error = "An exercise with this name is already available."
+        else:
+            # 参数化写入并绑定登录账户，创建成功后刷新动作列表。
+            db = get_db()
+            with db:
+                db.execute(
+                    "INSERT INTO Exercise "
+                    "(exercise_name, description, equipment, user_id) "
+                    "VALUES (?, ?, ?, ?)",
+                    (name, description, equipment, session["user_id"]),
+                )
+            flash("Exercise created.", "success")
+            return redirect(url_for("exercises"))
+    return render_template(
+        "create exercise.html", error=error
+    ), (400 if error else 200)
 
 
 def validate_note_form():
@@ -650,11 +704,7 @@ def validate_note_form():
     date_text = request.form.get("date", "").strip()
     weight_text = request.form.get("weight", "").strip()
     note_text = request.form.get("notes", "").strip()
-    exercise = query_db(
-        "SELECT exercise_id FROM Exercise WHERE exercise_id = ?",
-        (exercise_id,),
-        one=True,
-    )
+    exercise = available_exercise(exercise_id)
     if exercise is None:
         return None, "Select a valid exercise."
     try:
@@ -725,10 +775,8 @@ def edit_note(note_id):
             # 保存成功后提供明确反馈。
             flash("Workout record updated.", "success")
             return redirect(url_for("notes"))
-    exercises = query_db(
-        "SELECT exercise_id, exercise_name FROM"
-        " Exercise ORDER BY exercise_name"
-    )
+    # 编辑记录时也只提供公共动作和当前账户的私人动作。
+    exercises = available_exercises()
     return render_template(
         # 训练与编辑记录共用结果页面，未传 training 时显示编辑模式。
         "training.html",
@@ -808,11 +856,7 @@ def notes():
     conditions = ["WorkNotes.user_id = ?"]
     arguments = [session["user_id"]]
     if filters["exercise_id"]:
-        selected = query_db(
-            "SELECT exercise_id FROM Exercise WHERE exercise_id = ?",
-            (filters["exercise_id"],),
-            one=True,
-        )
+        selected = available_exercise(filters["exercise_id"])
         if selected is None:
             filter_error = "Select a valid exercise filter."
         else:
@@ -850,13 +894,7 @@ def notes():
         " '') DESC, WorkNotes.notes_id DESC"
     )
     results = [] if filter_error else query_db(sql, tuple(arguments))
-    exercise_options = query_db("""
-        SELECT
-            exercise_id,
-            exercise_name
-        FROM Exercise
-        ORDER BY exercise_name;
-        """)
+    exercise_options = available_exercises()
 
     return render_template(
         "work note.html",
@@ -1167,11 +1205,7 @@ def add_plan_exercises(plan_id):
             (day_id, plan_id),
             one=True,
         )
-        exercise = query_db(
-            "SELECT exercise_id FROM Exercise WHERE exercise_id = ?",
-            (exercise_id,),
-            one=True,
-        )
+        exercise = available_exercise(exercise_id)
         if day is None or exercise is None:
             error = "Select a valid training day and exercise."
         elif sets is None or reps is None:
@@ -1193,11 +1227,7 @@ def add_plan_exercises(plan_id):
         "HERE plan_id = ? ORDER BY day_id",
         (plan_id,),
     )
-    exercises = query_db(
-        "SELECT exercise_id, exercise_name, equ"
-        "ipment FROM Exercise ORDER BY exercise"
-        "_name"
-    )
+    exercises = available_exercises()
     plan_exercises = query_db(
         "SELECT we.workout_exercise_id, we.day_"
         "id, d.day_name, e.exercise_name, "

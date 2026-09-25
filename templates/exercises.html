@@ -44,6 +44,8 @@
                     </span>
 
                     <h2>{{ exercise["exercise_name"] }}</h2>
+                    {# 标明动作来源，帮助用户区分公共基础动作和自己的动作。 #}
+                    <span class="card-label">{{ 'Your exercise' if exercise['user_id'] else 'Basic exercise' }}</span>
 
                     <p>
                         {{ exercise["description"] or "Ready to add to your plan." }}
@@ -52,6 +54,12 @@
                 </article>
 
             {% endfor %}
+            {# 新增入口使用同一网格卡片尺寸，点击后打开独立表单。 #}
+            {% if session.get('user_id') %}
+            <a class="dashboard-card add-exercise-card" href="{{ url_for('create_exercise') }}" aria-label="Add exercise">
+                <span aria-hidden="true">+</span>
+            </a>
+            {% endif %}
 
         </section>
 

@@ -422,12 +422,19 @@ body {
     font-weight: 600;
 }
 
+.form-help {
+    margin: 7px 0 0;
+    color: #c8b8c8;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
 .form-group input {
     width: 100%;
     padding: 12px 14px;
     border: 1px solid #8b6f6f;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.9);
+    background-color: #f2eff2;
     color: #1f1f1f;
 }
 
@@ -682,13 +689,15 @@ body {
     resize: vertical;
     border: 1px solid #8b6f6f;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.9);
+    background-color: #f2eff2;
     color: #1f1f1f;
     font: inherit;
 }
 
 .form-group textarea:focus,
 .form-group input:focus {
+    background-color: #f2eff2;
+    color: #1f1f1f;
     border-color: #c878c8;
     outline: none;
     box-shadow: 0 0 0 3px rgba(200, 120, 200, 0.15);
@@ -808,11 +817,29 @@ body {
     border: 1px solid #8b6f6f;
     border-radius: 8px;
 
-    background: rgba(255, 255, 255, 0.9);
+    background-color: #f2eff2;
 
     color: #1f1f1f;
 
     font-size: 14px;
+}
+
+.form-group select:focus {
+    background-color: #f2eff2;
+    color: #1f1f1f;
+    border-color: #c878c8;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(200, 120, 200, 0.15);
+}
+
+/* Keep browser autofill the same colour as the normal input. */
+.form-group input:-webkit-autofill,
+.form-group input:-webkit-autofill:hover,
+.form-group input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1f1f1f;
+    -webkit-box-shadow: 0 0 0 1000px #f2eff2 inset;
+    box-shadow: 0 0 0 1000px #f2eff2 inset;
+    caret-color: #1f1f1f;
 }
 
 
@@ -1070,5 +1097,19 @@ body {
 .weekly-plan > .card-header, .weekly-plan > p,
 .recent-activity > .card-header { flex-shrink: 0; }
 .dashboard-scroll-content { overflow-wrap: anywhere; }
+/* 加号入口与动作卡片共享网格尺寸，提供鼠标及键盘聚焦反馈。 */
+.add-exercise-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 180px;
+    color: inherit;
+    text-decoration: none;
+}
+.add-exercise-card span { font-size: 64px; line-height: 1; }
+.add-exercise-card:hover, .add-exercise-card:focus-visible {
+    background: #b99e9e;
+    color: #000;
+}
 /* 成功记录的今日动作显示完成标记，避免与开始训练按钮混淆。 */
 .workout-completed { color: #a9dfb6; font-weight: 700; margin-top: 16px; }

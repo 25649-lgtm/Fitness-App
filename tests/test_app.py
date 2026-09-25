@@ -45,8 +45,58 @@ class AuthenticationTests(unittest.TestCase):
                 "User",
             ):
                 db.execute(f"DELETE FROM {table}")
+            # 清除测试创建的私人动作，公共动作继续供后续测试使用。
+            db.execute("DELETE FROM Exercise WHERE user_id IS NOT NULL")
         gym.app.config.update(TESTING=True, SECRET_KEY="test-only-key")
         self.client = gym.app.test_client()
+
+    def test_custom_exercises_are_private_and_selectable(self):
+        """验证自定义动作创建、边界输入、计划记录选择及跨账户隔离。"""
+        plan_id, day_id, _, _ = self.make_plan()
+        route = f"/workout-plan/{plan_id}/exercises"
+        for name in (" ", "x" * 121):
+            self.assertEqual(
+                self.post_form(
+                    "/exercises/new", {"exercise_name": name}
+                ).status_code,
+                400,
+            )
+        data = {"exercise_name": "My cable movement", "equipment": "Cable"}
+        self.assertEqual(self.post_form("/exercises/new", data).status_code, 302)
+        self.assertEqual(self.post_form("/exercises/new", data).status_code, 400)
+        with closing(sqlite3.connect(gym.DATABASE)) as db:
+            custom_id = db.execute(
+                "SELECT exercise_id FROM Exercise WHERE exercise_name = ?",
+                (data["exercise_name"],),
+            ).fetchone()[0]
+        for page in ("/exercises", route, "/notes"):
+            self.assertIn(b"My cable movement", self.client.get(page).data)
+        self.assertEqual(
+            self.post_form(
+                route,
+                {
+                    "day_id": day_id,
+                    "exercise_id": custom_id,
+                    "sets": "3",
+                    "reps": "10",
+                },
+            ).status_code,
+            302,
+        )
+        record = {
+            "exercise_id": custom_id,
+            "date": "2026-09-28",
+            "sets": "3",
+            "reps": "10",
+        }
+        self.assertEqual(self.post_form("/notes", record).status_code, 302)
+        self.post_form("/logout")
+        self.register("another@example.com")
+        self.login(email="another@example.com")
+        for page in ("/exercises", "/notes"):
+            self.assertNotIn(b"My cable movement", self.client.get(page).data)
+        self.assertEqual(self.post_form("/notes", record).status_code, 400)
+        self.assertIn(b"Bench Press", self.client.get("/exercises").data)
 
     def post_form(self, route, data=None):
         """先读取真实页面中的令牌，再模拟浏览器提交表单。"""
@@ -113,6 +163,21 @@ class AuthenticationTests(unittest.TestCase):
         """确认同一个邮箱不能重复注册。"""
         self.register()
         self.assertIn(b"already exists", self.register().data)
+
+    def test_registration_rejects_short_password_boundary(self):
+        """七个字符被拒绝，八个字符可注册，并且失败时数据库不改变。"""
+        short = {
+            "user_name": "Test",
+            "email": "short@example.com",
+            "password": "1234567",
+            "confirm_password": "1234567",
+        }
+        response = self.post_form("/signup", short)
+        self.assertIn(b"at least 8 characters", response.data)
+        with closing(sqlite3.connect(gym.DATABASE)) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM User").fetchone()[0], 0)
+        accepted = {**short, "password": "12345678", "confirm_password": "12345678"}
+        self.assertEqual(self.post_form("/signup", accepted).status_code, 302)
 
     def test_csrf_rejects_invalid_tokens_on_all_write_routes(self):
         """所有写入入口都必须拒绝缺失、错误或其他会话的令牌。"""
