@@ -347,7 +347,7 @@ def register():
 
     if request.method == "POST":
         user_name = request.form.get("user_name", "").strip()
-        email = request.form.get("email", "").strip().lower()
+        email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
 
@@ -392,8 +392,8 @@ def login():
     if "user_id" in session:
         return redirect(url_for("homepage"))
     if request.method == "POST":
-        # 邮箱与注册时保持相同格式；缺失字段使用空字符串，避免直接报错。
-        email = request.form.get("email", "").strip().lower()
+        # 保留邮箱大小写；只清理首尾空格，缺失字段使用空字符串。
+        email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
 
         # 按邮箱查询账户；密码由下面的哈希验证函数检查。

@@ -141,14 +141,27 @@ class AuthenticationTests(unittest.TestCase):
             self.assertTrue(check_password_hash(stored, "example-password"))
             self.assertEqual(marker, 1)
 
-    def test_correct_password_and_normalized_email(self):
-        """确认正确密码可登录，邮箱大小写和首尾空格不影响验证。"""
+    def test_email_case_is_distinct_and_spaces_are_trimmed(self):
+        """邮箱保留大小写区别，但登录时仍会清理首尾空格。"""
         self.register()
         self.assertEqual(
-            self.login(email=" TEST@EXAMPLE.COM ").status_code, 302
+            self.login(email=" test@example.com ").status_code, 302
         )
         with self.client.session_transaction() as session:
             self.assertIn("user_id", session)
+        self.post_form("/logout")
+        self.assertIn(
+            b"Incorrect email",
+            self.login(email="TEST@EXAMPLE.COM").data,
+        )
+        self.assertEqual(self.register("TEST@EXAMPLE.COM").status_code, 302)
+        with closing(sqlite3.connect(gym.DATABASE)) as db:
+            emails = {
+                row[0] for row in db.execute("SELECT email FROM User")
+            }
+        self.assertEqual(
+            emails, {"test@example.com", "TEST@EXAMPLE.COM"}
+        )
 
     def test_wrong_empty_and_missing_credentials_are_rejected(self):
         """确认错误、空白或缺失的登录资料不会建立登录会话。"""
